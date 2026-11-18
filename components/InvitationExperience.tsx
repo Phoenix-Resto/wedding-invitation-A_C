@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Languages, RotateCcw, ArrowDown, Sparkles } from "lucide-react";
 import { FloralCorner } from "./FloralCorner";
+import { WeddingStory } from "./WeddingStory";
 import { invitation, type Language } from "../config/invitation";
 
 type Stage = "closed" | "opening" | "revealed";
@@ -143,15 +144,7 @@ export function InvitationExperience() {
         </div>
       </section>
 
-      {stage === "revealed" && (
-        <section className="next-chapter" aria-label="Preview of upcoming wedding story">
-          <div className="next-chapter-line" />
-          <div className="next-chapter-flower">❦</div>
-          <p>{t.continuing}</p>
-          <h2>{t.phase2}</h2>
-          <span>✦</span>
-        </section>
-      )}
+      {stage === "revealed" && <WeddingStory language={language} reducedMotion={reducedMotion} />}
 
       <nav className="floating-actions" aria-label="Invitation controls">
         <button type="button" className="floating-button language-button" onClick={() => setLanguage(language === "en" ? "te" : "en")} aria-label={language === "en" ? "Switch to Telugu" : "Switch to English"} title={language === "en" ? "Switch to Telugu" : "Switch to English"}>

@@ -22,6 +22,15 @@ export const invitation = {
     blessing: "With the blessings of Lord Ganesha",
     continuing: "The celebration continues",
     phase2: "Our wedding story unfolds here in Phase 2",
+    story: {
+      aria: "Wedding invitation story", scrollHint: "Continue scrolling",
+      blessings: { kicker: "An auspicious beginning", heading: "With Divine Blessings", message: "Sri Ganeshaya Namaha · May this new journey be filled with grace, joy and togetherness." },
+      couple: { kicker: "Two hearts · one beautiful journey", heading: "The Beginning of Forever", message: "With love in our hearts, we begin our journey together." },
+      family: { kicker: "With the blessings of our families", heading: "A Joyful Invitation", parents: "Sri Kota Sivaprasad & Smt. Hima Sailaja", message: "Request the pleasure of your company, with family and friends, at the marriage of their elder son Abhinav Viswateja with Chandana, daughter of Sri Siddula Sainath and Smt. Naga Swapna." },
+      ceremony: { kicker: "Save the date", heading: "Our Wedding Day", month: "DECEMBER", day: "Saturday, 12 December 2026", time: "7:45 PM – 9:30 PM", note: "Pushkara Kalam: 8:27 PM" },
+      venue: { kicker: "Join us in celebration", heading: "Wedding Venue", dinner: "Dinner from 8:00 PM onwards", directions: "View directions" },
+      closing: { kicker: "With love and warm regards", heading: "Your Presence Is Our Blessing", message: "We look forward to celebrating this special occasion with you and your loved ones." },
+    },
   },
   te: {
     top: "శ్రీ గణేశాయ నమః",
@@ -43,5 +52,14 @@ export const invitation = {
     blessing: "శ్రీ గణేశుని ఆశీస్సులతో",
     continuing: "వేడుక కొనసాగుతుంది",
     phase2: "రెండవ దశలో పూర్తి వివాహ విశేషాలు",
+    story: {
+      aria: "వివాహ శుభలేఖ విశేషాలు", scrollHint: "క్రిందికి స్క్రోల్ చేయండి",
+      blessings: { kicker: "శుభారంభం", heading: "శ్రీ గణేశుని ఆశీస్సులతో", message: "శ్రీ గణేశాయ నమః · ఈ శుభకార్యానికి మీ అందరి ఆశీస్సులు కోరుచున్నాము." },
+      couple: { kicker: "రెండు మనసుల కలయిక", heading: "ఒక అందమైన ప్రయాణం", message: "ప్రేమతో, ఆనందంతో మా కొత్త జీవితానికి శ్రీకారం చుడుతున్నాము." },
+      family: { kicker: "మా కుటుంబ సభ్యుల ఆశీస్సులతో", heading: "సాదర ఆహ్వానం", parents: "శ్రీ కోట శివప్రసాద్ – శ్రీమతి హిమ శైలజ", message: "మా జ్యేష్ఠ పుత్రుడు అభినవ్ విశ్వతేజ మరియు శ్రీ సిద్ధుల సాయినాథ్ – శ్రీమతి నాగ స్వప్న గార్ల పుత్రిక చందన వివాహానికి కుటుంబ సమేతంగా విచ్చేసి ఆశీర్వదించవలసిందిగా కోరుచున్నాము." },
+      ceremony: { kicker: "శుభ ముహూర్తం", heading: "వివాహ మహోత్సవం", month: "డిసెంబర్", day: "శనివారం, 12 డిసెంబర్ 2026", time: "రాత్రి 7:45 – 9:30", note: "పుష్కర కాలం: రాత్రి 8:27" },
+      venue: { kicker: "వివాహ వేడుకకు విచ్చేయండి", heading: "కళ్యాణ వేదిక", dinner: "విందు: రాత్రి 8:00 గంటల నుండి", directions: "మ్యాప్‌లో చూడండి" },
+      closing: { kicker: "ఆప్యాయ ఆహ్వానం", heading: "మీ రాకే మా ఆనందం", message: "మీ కుటుంబ సమేతంగా విచ్చేసి నూతన దంపతులను ఆశీర్వదించగలరు." },
+    },
   },
 } as const;

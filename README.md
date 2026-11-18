@@ -46,3 +46,11 @@ npm start
 - The opening is a lightweight 3D CSS fold animated by GSAP, not a full physics-based book mesh.
 - Phase 2 will build the pinned, reversible scroll-story sections.
 - Fonts are served from Google Fonts via CSS; for a fully offline setup, self-host permitted font assets and change the CSS font declarations.
+
+## Phase 2 scroll experience
+
+Once the invitation cover opens, six immersive scenes become available. Scroll down to play each scene and scroll up to reverse it. The bottom-left language toggle updates all the content, while the bottom-right replay button resets to the unopened cover. Scroll-triggered animations are disabled for visitors who prefer reduced motion.
+
+The couple portrait is currently an ornamental placeholder; replace it with an authorized photograph when ready. The venue directions button opens a Google Maps **search**, so confirm the specific venue result before publishing.
+
+See `docs/opencode-permissions.md` for the project-wide OpenCode prompt policy, its security tradeoffs and version caveats.

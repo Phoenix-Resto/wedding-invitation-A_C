@@ -3,15 +3,26 @@
   "instructions": [
     "docs/development-guidelines.md",
     "docs/git-workflow.md",
-    "docs/documentation-index.md"
+    "docs/documentation-index.md",
+    "docs/opencode-permissions.md"
   ],
   "permission": {
+    "*": "allow",
     "bash": {
-      "*": "ask",
-      "git status*": "allow",
-      "git diff*": "allow",
+      "*": "allow",
       "git push*": "ask",
-      "git push --force*": "deny"
-    }
+      "git push --force*": "deny",
+      "git reset --hard*": "ask",
+      "git clean*": "ask",
+      "git branch -D*": "ask",
+      "git checkout --*": "ask",
+      "Remove-Item*": "ask",
+      "rm *": "ask",
+      "del *": "ask",
+      "rmdir *": "ask",
+      "Format-Volume*": "deny",
+      "git config --global*": "ask"
+    },
+    "external_directory": "ask"
   }
 }
