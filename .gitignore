@@ -4,3 +4,5 @@ out
 .env*
 *.tsbuildinfo
 .DS_Store
+.opencode/notes/
+.opencode/cache-files/
