@@ -5,6 +5,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ArrowDown, MapPin, CalendarDays, Utensils, Heart } from "lucide-react";
 import { invitation, type Language } from "../config/invitation";
+import { weddingPhotos } from "../config/photos";
 import { FloralCorner } from "./FloralCorner";
 
 if (typeof window !== "undefined") gsap.registerPlugin(ScrollTrigger);
@@ -23,12 +24,14 @@ export function WeddingStory({ language, reducedMotion }: Props) {
       scenes.forEach((scene) => {
         const back = scene.querySelector<HTMLElement>(".scene-backdrop");
         const ornament = scene.querySelector<HTMLElement>(".scene-ornament");
+        const flora = gsap.utils.toArray<HTMLElement>(".scene-floral", scene);
+        const portraits = gsap.utils.toArray<HTMLElement>("[data-photo-layer]", scene);
         const parts = gsap.utils.toArray<HTMLElement>("[data-story-reveal]", scene);
         const timeline = gsap.timeline({
           scrollTrigger: {
             trigger: scene,
             start: "top top",
-            end: () => `+=${Math.round(window.innerHeight * 1.15)}`,
+            end: () => `+=${Math.round(window.innerHeight * (scene.classList.contains("story-gallery") ? 1.5 : 1.15))}`,
             pin: true,
             scrub: 0.65,
             invalidateOnRefresh: true,
@@ -40,9 +43,16 @@ export function WeddingStory({ language, reducedMotion }: Props) {
         if (ornament) timeline.fromTo(ornament, { scale: 0.86, rotate: -8, opacity: 0.35 }, {
           scale: 1.05, rotate: 5, opacity: 1, duration: 1.3, ease: "none"
         }, 0);
-        if (back) timeline.fromTo(back, { yPercent: -4, scale: 1.06 }, { yPercent: 4, scale: 1, duration: 1.5, ease: "none" }, 0);
+        if (back) timeline.fromTo(back, { yPercent: -5, scale: 1.09 }, { yPercent: 5, scale: 1, duration: 1.55, ease: "none" }, 0);
+        if (flora.length) timeline.fromTo(flora, { yPercent: -12, rotate: -5 }, { yPercent: 12, rotate: 5, duration: 1.55, ease: "none", stagger: .08 }, 0);
+        if (portraits.length) {
+          timeline.fromTo(portraits, { opacity: 0, yPercent: 13, scale: 1.06 }, {
+            opacity: 1, yPercent: 0, scale: 1, duration: .7, stagger: .22, ease: "power2.out"
+          }, .16);
+        }
         timeline.to(parts, { opacity: 0, y: "-2rem", stagger: 0.055, duration: 0.35, ease: "power1.in" }, 1.05);
       });
+      // Refresh after React has committed the new scene heights.
       ScrollTrigger.refresh();
     }, rootElement);
     return () => context.revert();
@@ -70,12 +80,39 @@ export function WeddingStory({ language, reducedMotion }: Props) {
           <span className="scene-kicker" data-story-reveal>{t.couple.kicker}</span>
           <h2 data-story-reveal>{t.couple.heading}</h2>
           <div className="couple-portrait-frame scene-ornament" aria-hidden="true">
-            <div className="couple-photo-mark"><Heart size={44} strokeWidth={1} /><span>12 · 12 · 2026</span></div>
+            {weddingPhotos.together ? (
+              <img className="couple-portrait-image" src={weddingPhotos.together} alt="" />
+            ) : (
+              <div className="couple-photo-mark"><Heart size={44} strokeWidth={1} /><span>12 · 12 · 2026</span></div>
+            )}
           </div>
           <div className="couple-display" data-story-reveal><strong>{invitation[language].groom}</strong><span>&</span><strong>{invitation[language].bride}</strong></div>
           <p data-story-reveal>{t.couple.message}</p>
         </div>
       </div>
+
+      {(weddingPhotos.groom || weddingPhotos.bride) && (
+        <div className="story-scene story-gallery" aria-label={t.gallery.heading}>
+          <div className="scene-backdrop" aria-hidden="true" />
+          <FloralCorner className="scene-floral scene-floral-a" />
+          <FloralCorner className="scene-floral scene-floral-b" />
+          <div className="scene-content gallery-content">
+            <span className="scene-kicker" data-story-reveal>{t.gallery.kicker}</span>
+            <h2 data-story-reveal>{t.gallery.heading}</h2>
+            <div className="portrait-pair">
+              {weddingPhotos.groom && <figure className="portrait-sheet" data-photo-layer>
+                <img src={weddingPhotos.groom} alt={t.gallery.groomAlt} loading="lazy" />
+                <figcaption>{invitation[language].groom}</figcaption>
+              </figure>}
+              {weddingPhotos.bride && <figure className="portrait-sheet" data-photo-layer>
+                <img src={weddingPhotos.bride} alt={t.gallery.brideAlt} loading="lazy" />
+                <figcaption>{invitation[language].bride}</figcaption>
+              </figure>}
+            </div>
+            <p data-story-reveal>{t.gallery.message}</p>
+          </div>
+        </div>
+      )}
 
       <div className="story-scene story-family" aria-label={t.family.heading}>
         <div className="scene-backdrop" aria-hidden="true" />

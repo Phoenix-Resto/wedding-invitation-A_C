@@ -6,23 +6,96 @@
     "docs/documentation-index.md",
     "docs/opencode-permissions.md"
   ],
-  "permission": {
-    "*": "allow",
-    "bash": {
-      "*": "allow",
-      "git push*": "ask",
-      "git push --force*": "deny",
-      "git reset --hard*": "ask",
-      "git clean*": "ask",
-      "git branch -D*": "ask",
-      "git checkout --*": "ask",
-      "Remove-Item*": "ask",
-      "rm *": "ask",
-      "del *": "ask",
-      "rmdir *": "ask",
-      "Format-Volume*": "deny",
-      "git config --global*": "ask"
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "allow"
     },
-    "external_directory": "ask"
-  }
+    {
+      "action": "external_directory",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "read",
+      "resource": "*.env",
+      "effect": "ask"
+    },
+    {
+      "action": "read",
+      "resource": "*.env.*",
+      "effect": "ask"
+    },
+    {
+      "action": "read",
+      "resource": "*.env.example",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "*",
+      "effect": "allow"
+    },
+    {
+      "action": "shell",
+      "resource": "git push *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "git push --force *",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "git reset --hard *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "git clean *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "git branch -D *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "git checkout -- *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "Remove-Item *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "rm *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "del *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "rmdir *",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "Format-Volume *",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "git config --global *",
+      "effect": "ask"
+    }
+  ]
 }
