@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Languages, RotateCcw, ArrowDown, Sparkles } from "lucide-react";
 import { FloralCorner } from "./FloralCorner";
+import { PetalField } from "./PetalField";
 import { WeddingStory } from "./WeddingStory";
 import { invitation, type Language } from "../config/invitation";
 
@@ -78,6 +79,7 @@ export function InvitationExperience() {
 
   return (
     <main className="invitation-page">
+      <PetalField />
       <div className="ambient ambient-one" aria-hidden="true" />
       <div className="ambient ambient-two" aria-hidden="true" />
       <div className="surface-grain" aria-hidden="true" />

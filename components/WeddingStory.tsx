@@ -7,6 +7,7 @@ import { ArrowDown, MapPin, CalendarDays, Utensils, Heart } from "lucide-react";
 import { invitation, type Language } from "../config/invitation";
 import { weddingPhotos } from "../config/photos";
 import { FloralCorner } from "./FloralCorner";
+import { PetalField } from "./PetalField";
 
 if (typeof window !== "undefined") gsap.registerPlugin(ScrollTrigger);
 
@@ -19,49 +20,91 @@ export function WeddingStory({ language, reducedMotion }: Props) {
   useEffect(() => {
     const rootElement = root.current;
     if (!rootElement || reducedMotion) return;
+
+    // Set up all scenes after the invitation reveal. Each timeline is tied to
+    // actual scroll progress, so scrolling upwards reverses the choreography.
     const context = gsap.context(() => {
       const scenes = gsap.utils.toArray<HTMLElement>(".story-scene", rootElement);
       scenes.forEach((scene) => {
-        const back = scene.querySelector<HTMLElement>(".scene-backdrop");
+        const lines = gsap.utils.toArray<HTMLElement>("[data-story-reveal]", scene);
         const ornament = scene.querySelector<HTMLElement>(".scene-ornament");
-        const flora = gsap.utils.toArray<HTMLElement>(".scene-floral", scene);
+        const backdrop = scene.querySelector<HTMLElement>(".scene-backdrop");
+        const florals = gsap.utils.toArray<HTMLElement>(".scene-floral", scene);
         const portraits = gsap.utils.toArray<HTMLElement>("[data-photo-layer]", scene);
-        const parts = gsap.utils.toArray<HTMLElement>("[data-story-reveal]", scene);
+        const petals = gsap.utils.toArray<HTMLElement>(".petal", scene);
+
+        // The intro, reading hold, and exit are separate parts of a single
+        // scrubbed timeline. No image or text should just appear permanently.
         const timeline = gsap.timeline({
+          defaults: { ease: "none" },
           scrollTrigger: {
             trigger: scene,
             start: "top top",
-            end: () => `+=${Math.round(window.innerHeight * (scene.classList.contains("story-gallery") ? 1.5 : 1.15))}`,
+            end: () => `+=${Math.round(window.innerHeight * (scene.classList.contains("story-gallery") ? 2.5 : 2))}`,
             pin: true,
-            scrub: 0.65,
+            pinSpacing: true,
+            scrub: 0.45,
+            anticipatePin: 1,
             invalidateOnRefresh: true,
-          }
+          },
         });
-        timeline.fromTo(parts, { opacity: 0, y: "3rem" }, {
-          opacity: 1, y: "0rem", stagger: 0.12, duration: 0.5, ease: "power2.out"
-        }, 0.07);
-        if (ornament) timeline.fromTo(ornament, { scale: 0.86, rotate: -8, opacity: 0.35 }, {
-          scale: 1.05, rotate: 5, opacity: 1, duration: 1.3, ease: "none"
-        }, 0);
-        if (back) timeline.fromTo(back, { yPercent: -5, scale: 1.09 }, { yPercent: 5, scale: 1, duration: 1.55, ease: "none" }, 0);
-        if (flora.length) timeline.fromTo(flora, { yPercent: -12, rotate: -5 }, { yPercent: 12, rotate: 5, duration: 1.55, ease: "none", stagger: .08 }, 0);
-        if (portraits.length) {
-          timeline.fromTo(portraits, { opacity: 0, yPercent: 13, scale: 1.06 }, {
-            opacity: 1, yPercent: 0, scale: 1, duration: .7, stagger: .22, ease: "power2.out"
-          }, .16);
+
+        timeline.fromTo(lines,
+          { autoAlpha: 0, yPercent: 70, filter: "blur(0.4rem)" },
+          { autoAlpha: 1, yPercent: 0, filter: "blur(0rem)", duration: 1, stagger: 0.15, ease: "power2.out" },
+          0.05,
+        );
+        if (ornament) {
+          timeline.fromTo(ornament,
+            { autoAlpha: 0, scale: 0.72, rotation: -12 },
+            { autoAlpha: 1, scale: 1, rotation: 0, duration: 1.25, ease: "power2.out" },
+            0.08,
+          );
         }
-        timeline.to(parts, { opacity: 0, y: "-2rem", stagger: 0.055, duration: 0.35, ease: "power1.in" }, 1.05);
+        if (backdrop) {
+          timeline.fromTo(backdrop, { yPercent: -12, scale: 1.12 }, { yPercent: 9, scale: 1, duration: 3.5 }, 0);
+        }
+        florals.forEach((floral, index) => {
+          timeline.fromTo(floral,
+            { yPercent: index ? 18 : -18, xPercent: index ? 9 : -9, rotation: index ? 170 : -12 },
+            { yPercent: index ? -15 : 18, xPercent: index ? -5 : 6, rotation: index ? 190 : 9, duration: 3.5 },
+            0,
+          );
+        });
+        if (portraits.length) {
+          timeline.fromTo(portraits,
+            { autoAlpha: 0, yPercent: 25, scale: 0.92 },
+            { autoAlpha: 1, yPercent: 0, scale: 1, duration: 1.3, stagger: 0.22, ease: "power2.out" },
+            0.28,
+          );
+        }
+        petals.forEach((petal, index) => {
+          timeline.fromTo(petal,
+            { yPercent: 60, xPercent: index % 2 ? -80 : 70, rotation: -35 },
+            { yPercent: -110, xPercent: index % 2 ? 80 : -70, rotation: 100, duration: 3.5 }, 0,
+          );
+        });
+        // Hold the readable scene, then fade the content away while the
+        // background and flowers continue to drift.
+        timeline.to(lines, { autoAlpha: 0, yPercent: -35, filter: "blur(0.3rem)", duration: 0.65, stagger: 0.07 }, 2.55);
+        if (ornament) timeline.to(ornament, { autoAlpha: 0, scale: 1.1, duration: 0.6 }, 2.75);
+        timeline.to({}, { duration: 0.01 }, 3.5); // Keep a consistent scene timeline.
       });
-      // Refresh after React has committed the new scene heights.
-      ScrollTrigger.refresh();
     }, rootElement);
-    return () => context.revert();
+
+    // Wait one layout frame before measuring pinned heights.
+    const frame = window.requestAnimationFrame(() => ScrollTrigger.refresh());
+    return () => {
+      window.cancelAnimationFrame(frame);
+      context.revert();
+    };
   }, [reducedMotion]);
 
   return (
     <section className={`wedding-story ${reducedMotion ? "story-static" : ""}`} ref={root} aria-label={t.aria}>
       <div className="story-scene story-blessing" aria-label={t.blessings.heading}>
         <div className="scene-backdrop" aria-hidden="true" />
+        <PetalField />
         <FloralCorner className="scene-floral scene-floral-a" />
         <div className="scene-content">
           <span className="scene-kicker" data-story-reveal>{t.blessings.kicker}</span>
@@ -75,6 +118,7 @@ export function WeddingStory({ language, reducedMotion }: Props) {
 
       <div className="story-scene story-couple" aria-label={t.couple.heading}>
         <div className="scene-backdrop" aria-hidden="true" />
+        <PetalField />
         <FloralCorner className="scene-floral scene-floral-b" />
         <div className="scene-content couple-content">
           <span className="scene-kicker" data-story-reveal>{t.couple.kicker}</span>
@@ -94,6 +138,7 @@ export function WeddingStory({ language, reducedMotion }: Props) {
       {(weddingPhotos.groom || weddingPhotos.bride) && (
         <div className="story-scene story-gallery" aria-label={t.gallery.heading}>
           <div className="scene-backdrop" aria-hidden="true" />
+        <PetalField />
           <FloralCorner className="scene-floral scene-floral-a" />
           <FloralCorner className="scene-floral scene-floral-b" />
           <div className="scene-content gallery-content">
@@ -116,6 +161,7 @@ export function WeddingStory({ language, reducedMotion }: Props) {
 
       <div className="story-scene story-family" aria-label={t.family.heading}>
         <div className="scene-backdrop" aria-hidden="true" />
+        <PetalField />
         <FloralCorner className="scene-floral scene-floral-a" />
         <div className="scene-content">
           <span className="scene-kicker" data-story-reveal>{t.family.kicker}</span>
@@ -129,6 +175,7 @@ export function WeddingStory({ language, reducedMotion }: Props) {
 
       <div className="story-scene story-date" aria-label={t.ceremony.heading}>
         <div className="scene-backdrop" aria-hidden="true" />
+        <PetalField />
         <FloralCorner className="scene-floral scene-floral-b" />
         <div className="scene-content">
           <span className="scene-kicker" data-story-reveal>{t.ceremony.kicker}</span>
@@ -143,6 +190,7 @@ export function WeddingStory({ language, reducedMotion }: Props) {
 
       <div className="story-scene story-venue" aria-label={t.venue.heading}>
         <div className="scene-backdrop" aria-hidden="true" />
+        <PetalField />
         <FloralCorner className="scene-floral scene-floral-a" />
         <div className="scene-content">
           <span className="scene-kicker" data-story-reveal>{t.venue.kicker}</span>
@@ -158,6 +206,7 @@ export function WeddingStory({ language, reducedMotion }: Props) {
 
       <div className="story-scene story-finale" aria-label={t.closing.heading}>
         <div className="scene-backdrop" aria-hidden="true" />
+        <PetalField />
         <FloralCorner className="scene-floral scene-floral-b" />
         <div className="scene-content">
           <span className="scene-kicker" data-story-reveal>{t.closing.kicker}</span>
