@@ -536,7 +536,7 @@ export default function InvitationExperience({ onReplay }: { onReplay: () => voi
     >
       <div className="inv-scroll-track" style={{ height: `${(TOTAL_SCROLL_UNITS + 1) * 100}dvh` }} aria-hidden="true" />
     </div>
-    <div className={`inv-scroll-hint ${showHint && activeScene === 0 ? 'inv-scroll-hint--visible' : ''}`} aria-hidden="true"><span>Scroll to explore</span><span className="inv-scroll-hint__chevron">⌄</span></div>
+    <div className={`inv-scroll-hint ${showHint && activeScene === 0 ? 'inv-scroll-hint--visible' : ''}`} aria-hidden="true"><span>Scroll slowly to feel full experience</span><span className="inv-scroll-hint__chevron">^</span></div>
     <div className="inv-controls" aria-label="Invitation controls">
       <div className={`inv-language-toggle ${showLanguage ? 'inv-control--shown' : ''}`} aria-label="Invitation language">
         <button className={language === 'te' ? 'is-active' : ''} aria-pressed={language === 'te'} type="button" tabIndex={showLanguage ? 0 : -1} onClick={() => setLanguage('te')}>తెలుగు</button>
