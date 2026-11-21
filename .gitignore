@@ -1,8 +1,12 @@
-node_modules
+node_modules/
 .next
-out
-.env*
 *.tsbuildinfo
+dist/
+.vite/
 .DS_Store
+*.local
+.env
+.env.*
+!.env.example
 .opencode/notes/
 .opencode/cache-files/

@@ -1,0 +1,255 @@
+:root {
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  color: #62463b;
+  background: #efe4d7;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; }
+body { overflow: hidden; }
+button { font: inherit; }
+button:focus-visible { outline: 2px solid #a77d4c; outline-offset: .22rem; }
+
+.invitation-app {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+  overscroll-behavior: none;
+  background:
+    radial-gradient(ellipse 64% 58% at 50% 46%, rgba(255,252,244,.94), rgba(255,245,232,.46) 65%, transparent),
+    radial-gradient(ellipse at 4% 4%, #f3e4db, transparent 48%),
+    radial-gradient(ellipse at 96% 95%, #e0c8ba, transparent 51%),
+    linear-gradient(160deg, #e8d6cb 0%, #f6eee4 54%, #e4d0be 100%);
+}
+
+/* Floral ambience is behind the invitation, never an extra frame around it. */
+.ambience { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ambience::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: .13;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.2' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+}
+.ambience__glow { position: absolute; width: 52vmax; aspect-ratio: 1; border-radius: 50%; filter: blur(3.5rem); opacity: .42; animation: glow-breathe 8s ease-in-out infinite alternate; }
+.ambience__glow--left { left: -25vmax; top: -21vmax; background: radial-gradient(circle,#fff7ee 0%,#eccfcb 44%,transparent 72%); }
+.ambience__glow--right { right: -26vmax; bottom: -24vmax; background: radial-gradient(circle,#f9e4d5 0%,#d2aba0 47%,transparent 74%); animation-delay: -4s; }
+.ambience__engraving { position: absolute; width: clamp(8rem,31vw,18rem); color: #b79d89; opacity: .24; animation: engraving-reveal 2.3s ease-out both; }
+.ambience__engraving svg { display: block; width: 100%; height: auto; }
+.ambience__engraving--left { bottom: -9%; left: -6%; transform: rotate(-8deg); }
+.ambience__engraving--right { top: -9%; right: -7%; transform: rotate(172deg); animation-delay: .45s; }
+.ambience__petals { position: absolute; inset: 0; }
+.petal {
+  position: absolute;
+  z-index: 1;
+  left: var(--x);
+  top: -8%;
+  display: block;
+  width: var(--size);
+  height: calc(var(--size) * .67);
+  border-radius: 87% 7% 80% 10%;
+  background: linear-gradient(132deg,rgba(247,205,202,.75),rgba(206,143,142,.7) 55%,rgba(254,231,207,.65));
+  box-shadow: inset .07rem .06rem .12rem rgba(255,255,255,.6), .1rem .17rem .3rem rgba(140,92,89,.08);
+  opacity: 0;
+  transform-origin: 48% 62%;
+  animation: petal-fall var(--duration) var(--delay) linear infinite;
+}
+.petal:nth-child(3n) { background: linear-gradient(120deg,#f5dfd5,#cb9c93 60%,#f9e9d2); }
+.petal:nth-child(4n) { width: calc(var(--size) * .66); }
+.twinkle { position: absolute; z-index: 1; left: var(--x); top: var(--y); width: .55rem; aspect-ratio: 1; opacity: 0; animation: star-pulse 4.5s var(--delay) ease-in-out infinite; }
+.twinkle::before, .twinkle::after { content: ''; position: absolute; background: #b89053; box-shadow: 0 0 .5rem #fff6df; }
+.twinkle::before { left: 46%; top: 0; height: 100%; width: 8%; }
+.twinkle::after { top: 46%; left: 0; width: 100%; height: 8%; }
+
+/* Mobile: the artwork stretches to the usable viewport, with a small rim of background.
+   All opening frames occupy the exact same viewport-aligned stage. */
+.screen {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding:
+    max(clamp(.6rem,2.1svh,1rem),env(safe-area-inset-top))
+    clamp(.55rem,2.2vw,1rem)
+    max(clamp(.6rem,2.1svh,1rem),env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+.screen--cover { z-index: 2; visibility: hidden; }
+.phase-cover-arrive .screen--cover,
+.phase-cover .screen--cover,
+.phase-opening .screen--cover,
+.phase-opened .screen--cover { visibility: visible; }
+.phase-cover .screen--cover,
+.phase-opened .screen--cover { pointer-events: auto; }
+.phase-cover-arrive .screen--splash,
+.phase-cover .screen--splash,
+.phase-opening .screen--splash,
+.phase-opened .screen--splash { visibility: hidden; }
+
+.stage { position: relative; display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; }
+.invitation-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transform: scale(1);
+  will-change: opacity, transform;
+  pointer-events: none;
+}
+.invitation-card__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill; /* Intentional: full-height phone artwork with small surrounding gaps. */
+  filter: drop-shadow(0 .8rem 1rem rgba(77,47,33,.24)) drop-shadow(0 .16rem .18rem rgba(88,60,47,.14));
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
+/* The splash fades IN and OUT at its final size: no tilt, slide, bounce or zoom. */
+.phase-splash.is-ready .invitation-card--splash { animation: splash-fade-in 1.15s ease-out both; }
+.phase-splash-exit .invitation-card--splash { animation: splash-fade-out .95s ease-in-out both; }
+
+/* Loader is overlaid below the lettering printed in the uploaded splash art. */
+.splash-loader {
+  position: absolute;
+  z-index: 3;
+  top: 85.7%;
+  left: 50%;
+  width: 28%;
+  transform: translateX(-50%);
+  opacity: 0;
+}
+.phase-splash.is-ready .splash-loader { animation: loader-appear .45s .82s both; }
+.phase-splash-exit .splash-loader { animation: loader-disappear .5s ease both; }
+.splash-loader__line {
+  height: clamp(.13rem,.42vw,.23rem);
+  overflow: hidden;
+  border-radius: 99rem;
+  background: rgba(122,87,57,.23);
+  box-shadow: 0 1px 1px rgba(255,255,255,.7);
+}
+.splash-loader__line span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg,#9a7048,#e8c88b,#aa7c4e);
+  border-radius: inherit;
+  box-shadow: 0 0 .65rem rgba(203,145,80,.65);
+}
+.phase-splash.is-ready .splash-loader__line span { animation: loader-fill 2.65s .84s ease-in-out both; }
+.phase-splash-exit .splash-loader__line span { width: 100%; }
+.splash-loader__gem { position: absolute; top: .5rem; left: 50%; transform: translateX(-50%); color: #987047; font-size: .8rem; animation: star-pulse 1.5s ease-in-out infinite; }
+
+/* The cover appears AFTER the splash is gone: small -> full scale and transparent -> opaque. */
+.phase-cover-arrive .invitation-card--cover { animation: cover-approach 1.35s cubic-bezier(.17,.78,.23,1) both; }
+.phase-cover .invitation-card--cover,
+.phase-opening .invitation-card--cover,
+.phase-opened .invitation-card--cover { opacity: 1; transform: scale(1); }
+.phase-cover .invitation-card--cover { pointer-events: auto; }
+
+/* Open Card stays invisible during the zoom, THEN slides upward and fades in. */
+.open-card-button {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(.4rem,1.5vw,.65rem);
+  min-height: 3rem;
+  padding: .72rem clamp(1rem,4vw,1.6rem);
+  border: 1px solid rgba(159,116,73,.74);
+  border-radius: 99rem;
+  color: #72513e;
+  background: linear-gradient(145deg,rgba(255,253,246,.98),rgba(243,223,195,.98));
+  box-shadow: 0 .4rem 1.3rem rgba(96,56,41,.2), inset 0 1px 0 #fff, 0 0 0 .2rem rgba(250,239,223,.5);
+  font-size: clamp(.7rem,2.7vw,.89rem);
+  font-weight: bold;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%,calc(-50% + 1.7rem));
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.open-card-button__spark { color: #ad895b; font-size: 1.25rem; line-height: .5; }
+.open-card-button__arrow { font-size: 1rem; font-weight: normal; transition: transform .25s ease; }
+.phase-cover .open-card-button { animation: button-slide-up .8s cubic-bezier(.18,.85,.24,1) both; }
+.phase-opening .open-card-button { animation: button-disappear .28s ease-in both; pointer-events: none; }
+.open-card-button:hover { background: linear-gradient(145deg,#fffdf7,#efdbbc); }
+.open-card-button:hover .open-card-button__arrow { transform: translateX(.22rem); }
+.open-card-button:active { filter: brightness(.96); }
+.open-card-button:disabled { cursor: default; }
+
+.replay-button {
+  position: absolute;
+  z-index: 5;
+  right: max(1rem,env(safe-area-inset-right));
+  bottom: max(1rem,env(safe-area-inset-bottom));
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .5rem .75rem;
+  border: 1px solid rgba(154,112,73,.35);
+  border-radius: 99rem;
+  color: #765740;
+  background: rgba(255,250,241,.91);
+  box-shadow: 0 .3rem .9rem rgba(93,65,46,.12);
+  font-size: .77rem;
+  cursor: pointer;
+  animation: replay-appear .6s ease-out both;
+}
+.replay-button svg { width: .85rem; height: .85rem; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+
+@keyframes glow-breathe { from {opacity:.35;transform:scale(.93);} to {opacity:.72;transform:scale(1.07);} }
+@keyframes engraving-reveal { from {opacity:0;filter:blur(.7rem);} to {opacity:.24;filter:blur(0);} }
+@keyframes petal-fall { 0% {transform:translate3d(0,-7vh,0) rotate(var(--turn)) rotateY(0);opacity:0;} 9% {opacity:.7;} 83% {opacity:.65;} 100% {transform:translate3d(var(--drift),114svh,0) rotate(540deg) rotateY(180deg);opacity:0;} }
+@keyframes star-pulse { 0%,100% {transform:scale(.4) rotate(-20deg);opacity:.15;} 50% {transform:scale(1.25) rotate(20deg);opacity:.76;} }
+@keyframes splash-fade-in { from {opacity:0;} to {opacity:1;} }
+@keyframes splash-fade-out { from {opacity:1;} to {opacity:0;} }
+@keyframes loader-appear { from {opacity:0;transform:translate(-50%,.45rem);} to {opacity:1;transform:translate(-50%,0);} }
+@keyframes loader-disappear { from {opacity:1;} to {opacity:0;} }
+@keyframes loader-fill { 0% {width:0;} 63% {width:72%;} 90% {width:93%;} 100% {width:100%;} }
+@keyframes cover-approach {
+  0% {opacity:0;transform:scale(.38);filter:blur(.4rem);}
+  35% {opacity:.52;filter:blur(.1rem);}
+  100% {opacity:1;transform:scale(1);filter:blur(0);}
+}
+@keyframes button-slide-up {
+  from {opacity:0;transform:translate(-50%,calc(-50% + 1.7rem));filter:blur(.15rem);}
+  to {opacity:1;transform:translate(-50%,-50%);filter:blur(0);}
+}
+@keyframes button-disappear { from {opacity:1;transform:translate(-50%,-50%);} to {opacity:0;transform:translate(-50%,calc(-50% - .6rem));} }
+@keyframes replay-appear { from {opacity:0;transform:translateY(.6rem);} to {opacity:1;transform:translateY(0);} }
+
+/* Keep proportions more conventional on wide displays; phone layouts remain edge-filling. */
+@media (min-width: 680px) {
+  .stage { width: min(90vw,34rem); height: min(94dvh,48rem); }
+  .screen { padding: clamp(1rem,3svh,2rem); }
+  .ambience__engraving--left { left: 7%; bottom: -8%; }
+  .ambience__engraving--right { right: 7%; top: -8%; }
+}
+@media (max-height: 420px) and (orientation: landscape) {
+  .screen { padding: .4rem; }
+  .stage { width: min(62vw,24rem); height: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .phase-splash.is-ready .invitation-card--splash,
+  .phase-cover-arrive .invitation-card--cover,
+  .phase-cover .invitation-card--cover,
+  .phase-opened .invitation-card--cover { opacity: 1; }
+  .phase-cover .open-card-button { opacity: 1; transform: translate(-50%,-50%); }
+}
