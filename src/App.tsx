@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import InvitationExperience from './InvitationExperience';
 
 type Phase = 'splash' | 'splash-exit' | 'cover-arrive' | 'cover' | 'button-drop' | 'opening' | 'opened';
 
@@ -13,19 +14,22 @@ const OPENING_FRAMES = Array.from(
   { length: 11 },
   (_, index) => `/images/opening/frame-${String(index + 2).padStart(2, '0')}.webp`,
 );
-// Each dwell leaves enough time for its corresponding size/position transition.
-// Frame 11 has a longer hold to begin the descent before frame 12 settles.
-const OPENING_FRAME_MS = [250, 290, 460, 540, 410, 300, 310, 310, 340, 680] as const;
+// Progression to a viewport-sized canvas: frames 2-3 rest, 4-5 grow,
+// and 6-12 exactly fill the usable screen (no overscaling outside the edges).
+const OPENING_FRAME_MS = [270, 320, 530, 570, 420, 320, 320, 320, 360, 420] as const;
+const FRAME_FILL_PROGRESS = [0, 0, 0.30, 0.68, 1, 1, 1, 1, 1, 1, 1] as const;
 
-// Frame 2 and 3 stay at the resting depth; camera correction and the rise begin
-// at frame 4, reach full-screen at 6, and remain there through 10.
-// Frame 11 starts falling and frame 12 reaches the original ground level.
-function openingPosition(index: number, fullScale: number) {
-  if (index < 2) return { scale: 1, lift: '0svh', stage: 'rest' };
-  if (index === 2) return { scale: 1.17, lift: '-2svh', stage: 'rising' };
-  if (index === 3) return { scale: 1 + (fullScale - 1) * .52, lift: '-2svh', stage: 'rising' };
-  if (index < 9) return { scale: fullScale, lift: '-1svh', stage: 'raised' };
-  return { scale: fullScale, lift: '-3svh', stage: index === 9 ? 'falling' : 'landed' };
+type FillTarget = { x: number; y: number; shiftX: number; shiftY: number };
+
+function openingPosition(index: number, target: FillTarget) {
+  const progress = FRAME_FILL_PROGRESS[index] ?? 1;
+  return {
+    scaleX: 1 + (target.x - 1) * progress,
+    scaleY: 1 + (target.y - 1) * progress,
+    shiftX: `${target.shiftX * progress}px`,
+    shiftY: `${target.shiftY * progress}px`,
+    stage: progress === 0 ? 'rest' : progress === 1 ? 'filled' : 'rising',
+  };
 }
 
 // x, resting height, delay, fall duration, size and rotation. Negative delays
@@ -138,22 +142,41 @@ export default function App() {
   const [coverLoaded, setCoverLoaded] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
   const [replayCount, setReplayCount] = useState(0);
-  const [fullScale, setFullScale] = useState(1.2);
+  const [fillTarget, setFillTarget] = useState<FillTarget>({ x: 1, y: 1, shiftX: 0, shiftY: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<HTMLElement>(null);
 
-  // Make the raised frames truly extend beyond the phone viewport, even on
-  // unusually tall phones. offsetHeight ignores CSS transforms/animations.
+  // Measure the RESTING card's box and interpolate its width and height to
+  // exactly match the viewport. Separate X/Y factors prevent the overshoot
+  // caused by uniform scaling on different phone aspect ratios.
   useEffect(() => {
     const card = cardRef.current;
     const app = appRef.current;
     if (!card || !app) return;
+
     const recalculate = () => {
-      const cardHeight = card.offsetHeight;
-      if (!cardHeight) return;
-      const next = Math.min(1.45, Math.max(1.05, (app.clientHeight * 0.80) / cardHeight));
-      setFullScale((previous) => Math.abs(previous - next) < .01 ? previous : next);
+      const width = card.offsetWidth;
+      const height = card.offsetHeight;
+      const stage = card.parentElement;
+      if (!width || !height || !stage) return;
+      const appBox = app.getBoundingClientRect();
+      const stageBox = stage.getBoundingClientRect();
+      // Layout offsets do not change when transforms animate.
+      const cardCenterX = stageBox.left + card.offsetLeft + width / 2;
+      const cardCenterY = stageBox.top + card.offsetTop + height / 2;
+      const next: FillTarget = {
+        x: app.clientWidth / width,
+        y: app.clientHeight / height,
+        shiftX: (appBox.left + app.clientWidth / 2) - cardCenterX,
+        shiftY: (appBox.top + app.clientHeight / 2) - cardCenterY,
+      };
+      setFillTarget((old) =>
+        Math.abs(old.x - next.x) < .001 && Math.abs(old.y - next.y) < .001 &&
+        Math.abs(old.shiftX - next.shiftX) < .5 && Math.abs(old.shiftY - next.shiftY) < .5
+          ? old : next,
+      );
     };
+
     recalculate();
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recalculate) : undefined;
     observer?.observe(app);
@@ -165,7 +188,7 @@ export default function App() {
     };
   }, []);
 
-  const openingPose = openingPosition(frameIndex, fullScale);
+  const openingPose = openingPosition(frameIndex, fillTarget);
 
   useEffect(() => {
     if (phase !== 'splash' || !splashLoaded) return;
@@ -192,11 +215,22 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [phase]);
 
-  // Preload and decode all the opening images while the visitor watches the intro.
-  // A single aligned img is swapped per frame: no overlapping ghost/flap layers.
+  // Preload and decode the opening frames and the first page art while the
+  // visitor watches the intro, so their entrance animation isn't delayed.
   useEffect(() => {
     if (!coverLoaded) return;
-    const preloads = OPENING_FRAMES.slice(1).map((src) => {
+    const preloads = [
+      ...OPENING_FRAMES.slice(1),
+      '/images/opening/frame-12-background.webp',
+      '/images/pilupu/god-left.webp',
+      '/images/pilupu/god-right.webp',
+      '/images/pilupu/text-center.webp',
+      '/images/groom.webp',
+      '/images/bride.webp',
+      '/images/couple.webp',
+      '/images/ceremony/panigrahanam.webp',
+      '/images/ceremony/date-ornament.webp',
+    ].map((src) => {
       const image = new window.Image();
       image.src = src;
       if (typeof image.decode === 'function') {
@@ -210,7 +244,7 @@ export default function App() {
   useEffect(() => {
     if (phase !== 'opening') return;
     if (frameIndex === OPENING_FRAMES.length - 1) {
-      setPhase('opened'); // Remain on the final, fully extracted invitation image.
+      setPhase('opened'); // Frame 12 remains viewport-sized as the first page background.
       return;
     }
     const timeout = window.setTimeout(
@@ -279,9 +313,10 @@ export default function App() {
             ref={cardRef}
             className={`invitation-card invitation-card--cover opening-pose--${openingPose.stage}`}
             style={{
-              '--opening-scale': openingPose.scale,
-              '--opening-lift': openingPose.lift,
-              '--opening-full-scale': fullScale,
+              '--opening-scale-x': openingPose.scaleX,
+              '--opening-scale-y': openingPose.scaleY,
+              '--opening-shift-x': openingPose.shiftX,
+              '--opening-shift-y': openingPose.shiftY,
             } as CSSProperties}
           >
             <img
@@ -310,11 +345,9 @@ export default function App() {
           </div>
         </div>
         {phase === 'opened' && (
-          <button className="replay-button" type="button" onClick={replay}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg>
-            Replay
-          </button>
+          <div className="invitation-page-background" aria-hidden="true" />
         )}
+        {phase === 'opened' && <InvitationExperience onReplay={replay} />}
       </section>
     </main>
   );

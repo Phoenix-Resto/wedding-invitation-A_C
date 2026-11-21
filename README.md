@@ -1,39 +1,54 @@
-# Wedding Invitation A & C — Phase 1 (opening depth correction)
+# Wedding Invitation A & C
 
-A mobile-first React + Vite + TypeScript wedding invitation. This patch preserves the existing splash, grounded background, petals, and 11 optimized WebP opening images. It changes the envelope motion and places **Open Card** immediately below the resting card, sharing its visual ground plane.
+Mobile-first React 19 / Vite / TypeScript invitation. The splash, envelope cover, and photographed opening frames are retained from the supplied repository; Phase 2 adds six scroll-driven content scenes after frame 12.
 
-## Run on your phone
+## Run
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Open the Vite network/LAN URL on your phone (same Wi-Fi). To check a production build:
+Use the LAN URL on a phone connected to the same Wi-Fi; browsers/devices without working GPU animations may show reduced or choppy effects. To check changes before committing:
 
 ```powershell
 npm run typecheck
 npm run build
 ```
 
-## Animation sequence
+## Experience
 
-1. **Splash:** fades in at rest, with a thick loading line and a travelling petal; fades away.
-2. **Cover:** oversized above the screen, falls inward and gently settles.
-3. **Open Card:** slides up and fades in directly **beneath the cover**, resting near its lower edge instead of floating at a fixed viewport position. On tap it drops downward.
-4. **Frame 02 / 03:** closed envelope at the original grounded size and depth.
-5. **Frame 04:** begins rising (slightly enlarged to compensate for the camera having zoomed out).
-6. **Frame 05:** continues rising, scaling up and moving slightly upward.
-7. **Frames 06–10:** fully raised; the card is larger than the phone viewport and intentionally clipped at the edges, as if it has moved close to the viewer.
-8. **Frame 11:** starts at the raised size, then begins the descent while the photo is still displayed.
-9. **Frame 12:** drops back to the original resting size with a soft landing; remains visible until the next phase.
+1. **Splash:** grounded image fades in and out; decorative loading line fills.
+2. **Cover:** drops from above; the Open Card button settles beneath it.
+3. **Opening:** frames 02–03 grounded, 04–05 approach, 06–12 fill the viewport. Frame 12 becomes the stationary page background.
+4. **Pilupu:** deity illustrations fade in, then the Telugu title. Scrolling unlocks after the intro reveal.
+5. **Groom:** photograph bottom-left, groom's names and parents top-right.
+6. **Bride:** photograph bottom-right, bride's names and parents top-left.
+7. **Vivahamu:** couple portrait centered above the traditional panigrahanam emblem and bilingual date motif.
+8. **Venue:** muhurtham, venue, dinner details centered.
+9. **Final credits:** Telugu slokam and English invitation line; after the final petal fall, a centered Replay control appears.
 
-The raised scale is calculated from the actual card height and viewport height, so tall phone screens also get a full-bleed raised look. The WebP assets retain their original aligned **1200 × 1600** transparent canvases and are **not** cropped or replaced. The motion is expressed using responsive CSS transforms. Timings and per-frame scale choices are in `src/App.tsx`; animation details are in `src/styles.css`.
+The five subsequent content sections remain within one native scrolling experience. Each full-screen scene is scaled **as a single group from its center** according to continuous scroll position—not as three discrete stages or as independently positioned elements. The stationary background does not scroll with these scenes. A new scene appears at half scale (approximately 25% of its final area) and increases smoothly; a leaving scene moves toward the viewer and fades.
 
-## Interactions and accessibility
+The bottom-left **తెలుగు / English** toggle appears from Groom through Venue; only one language's content is shown at a time. Replay is a bottom-right icon until Final Credits, where it becomes a centered icon with text after the scene has settled.
 
-Mobile tap highlight, usual touch-callout, dragging and selection are suppressed where supported. Keyboard focus remains visible. `prefers-reduced-motion` shortens motion and leaves the final frame grounded. These settings do not prevent screenshots or a visitor accessing public image files.
+### Petal trigger rules
 
-## Delta patch application
+- The intro's first petals are created once its text is visible; subsequent batches spawn when a **different** section reaches its scrolling midpoint.
+- Brief reverse scrolling within the same focused section creates no new batch. Returning after a different section midpoint creates a **new** batch; old petals are never regenerated.
+- Previously spawned petals continue floating left or right until naturally off-screen. Scrolling makes them drift faster but does not reinitialize them.
+- The petal layer is a lightweight canvas above the stationary page background, independent of section scale/scroll transforms. `prefers-reduced-motion` reduces the activity.
 
-This ZIP is a **delta-only overlay** on top of `wedding-invitation-A_C-phase1-grounded-motion-patch.zip` (with the earlier opening frames installed). Extract its contents into the existing repository root, preserving relative paths. It replaces only `src/App.tsx`, `src/styles.css`, and `README.md`; no image changes and no deletions.
+### Files to tune
+
+- `src/InvitationExperience.tsx`: `INCOMING_SCALE`, `OUTGOING_SCALE`, `MIDPOINT_TOLERANCE`, section content, petal simulation and timings.
+- `src/InvitationExperience.css`: responsive card placement, text sizing, language/replay controls.
+- `src/App.tsx` / `src/styles.css`: original splash, cover, opening frames and frame-12 background.
+
+Assets in `public/images/groom.webp`, `bride.webp`, `couple.webp` are optimized from the user's latest supplied **real photographs**, with their 3:4 / 3:4 / 4:3 proportions. `public/images/ceremony/` contains transparent extracts of the supplied panigrahanam and date ornaments.
+
+This is a public website: suppressing long-press, text selection and drag interactions is a presentation feature and cannot prevent image saving or screenshots.
+
+## Apply a delta patch
+
+The distributed patch ZIP is based on the user's uploaded `wedding-invitation-A_C.zip`. Extract **into that existing repository root**, preserving paths; overwrite only the included files. There is no top-level folder in the patch and no deletions. Preserve any unrelated local changes when merging.

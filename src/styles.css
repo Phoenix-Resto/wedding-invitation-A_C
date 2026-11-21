@@ -215,25 +215,70 @@ button:focus-visible { outline: .14rem solid #a77d4c; outline-offset: .25rem; }
 .phase-opened .invitation-card--cover { opacity: 1; transform: translate3d(0,0,0) scale(1); }
 .phase-cover .invitation-card--cover { pointer-events: auto; }
 
-/* The opening photographs were captured at different distances/heights.
-   Maintain one 1200x1600 canvas; compensate with motion rather than trimming.
-   Full-screen frames intentionally extend outside the phone's clipped stage. */
+/* Frame 4 begins a measured rise; frame 6 finishes exactly at the
+   viewport edges. Frame 12 remains there as the page background. */
 .phase-opening .invitation-card--cover,
 .phase-opened .invitation-card--cover {
   transform-origin: center center;
-  transform: translate3d(0, var(--opening-lift), 0) scale(var(--opening-scale));
-  transition: transform .48s cubic-bezier(.28,.12,.23,1);
+  transform: translate3d(var(--opening-shift-x),var(--opening-shift-y),0)
+             scale(var(--opening-scale-x),var(--opening-scale-y));
+  transition: transform .52s cubic-bezier(.23,.2,.24,1);
 }
-/* Frame 11 begins the descent while its artwork is still on screen. */
-.phase-opening .opening-pose--falling {
-  animation: opening-start-fall .66s cubic-bezier(.3,.12,.58,1) both;
-  transition: none;
+/* No floor shadow or falling petals over the full-screen page artwork. */
+.phase-opening .invitation-card--cover::after,
+.phase-opened .invitation-card--cover::after { opacity: 0; }
+.phase-opening .invitation-card--cover .petal-layer--surface,
+.phase-opened .invitation-card--cover .petal-layer--surface { opacity: 0; }
+.phase-opened .screen--cover { background: #dcd5cd; }
+.phase-opened .ambience { display: none; }
+.phase-opened .ground-controls { visibility: hidden; }
+
+/* The last photographed frame becomes the full-bleed, opaque page itself.
+   Fade into a cropped copy to remove transparent camera margins without
+   making earlier opening frames jump. This is the next scroll section base. */
+.invitation-page-background {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  pointer-events: none;
+  background: #d3cdc7 url('/images/opening/frame-12-background.webp') center / 100% 100% no-repeat;
+  animation: invitation-page-reveal .7s ease-in-out both;
 }
-/* Frame 12 completes the fall to the original grounded invitation size. */
-.phase-opening .opening-pose--landed,
-.phase-opened .opening-pose--landed {
-  animation: opening-ground-contact .92s cubic-bezier(.22,.64,.28,1) both;
-  transition: none;
+@keyframes invitation-page-reveal { from { opacity: 0; } to { opacity: 1; } }
+
+/* The first invitation heading is its own transparent layer over frame 12. */
+.pilupu-heading {
+  position: absolute;
+  z-index: 6;
+  top: clamp(4.5rem, 15svh, 10rem);
+  left: 50%;
+  width: min(94vw, 46rem);
+  display: grid;
+  grid-template-columns: minmax(0,.75fr) minmax(0,3.8fr) minmax(0,.75fr);
+  align-items: center;
+  column-gap: clamp(.1rem,1vw,.55rem);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.pilupu-heading img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 20svh;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  filter: drop-shadow(0 .06rem .03rem rgba(105,59,53,.12));
+}
+.pilupu-heading__deity { opacity: 0; animation: pilupu-reveal .8s ease-out both; }
+.pilupu-heading__deity--left { animation-delay: .85s; }
+.pilupu-heading__deity--right { animation-delay: 1.05s; }
+.pilupu-heading__title { opacity: 0; animation: pilupu-reveal 1s 1.7s ease-out both; }
+@keyframes pilupu-reveal {
+  from { opacity: 0; transform: translate3d(0,.65rem,0); filter: blur(.2rem); }
+  to { opacity: 1; transform: translate3d(0,0,0); filter: blur(0); }
 }
 
 /* Grounded button: laid immediately beneath the card, with a short contact
@@ -351,16 +396,6 @@ button:focus-visible { outline: .14rem solid #a77d4c; outline-offset: .25rem; }
   90% {transform:translate3d(0,.11rem,0) scale(.997);}
   100% {opacity:1;transform:translate3d(0,0,0) scale(1);}
 }
-@keyframes opening-start-fall {
-  0%, 26% { transform: translate3d(0,-2svh,0) scale(var(--opening-full-scale)); }
-  100% { transform: translate3d(0,-1svh,0) scale(calc(var(--opening-full-scale) * .78)); }
-}
-@keyframes opening-ground-contact {
-  0% { transform: translate3d(0,-1svh,0) scale(calc(var(--opening-full-scale) * .78)); }
-  77% { transform: translate3d(0,.3rem,0) scale(.975); }
-  88% { transform: translate3d(0,-.15rem,0) scale(1.008); }
-  100% { transform: translate3d(0,0,0) scale(1); }
-}
 @keyframes button-rise {
   from {opacity:0;transform:translate3d(0,1.7rem,0);}
   to {opacity:1;transform:translate3d(0,0,0);}
@@ -392,6 +427,7 @@ button:focus-visible { outline: .14rem solid #a77d4c; outline-offset: .25rem; }
   .phase-opened .invitation-card--cover { opacity: 1; }
   .phase-cover .open-card-button { opacity: 1; transform: translate3d(0,0,0); }
   .phase-opening .invitation-card--cover,
-  .phase-opened .invitation-card--cover { transform: translate3d(0,0,0) scale(1); }
+  .phase-opened .invitation-card--cover { transform: translate3d(var(--opening-shift-x),var(--opening-shift-y),0) scale(var(--opening-scale-x),var(--opening-scale-y)); }
+  .pilupu-heading img { animation-delay: 0ms; opacity: 1; transform: none; filter: none; }
   .phase-button-drop .open-card-button { opacity: 0; }
 }
