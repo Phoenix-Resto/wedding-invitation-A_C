@@ -1,54 +1,62 @@
 # Wedding Invitation A & C
 
-Mobile-first React 19 / Vite / TypeScript invitation. The splash, envelope cover, and photographed opening frames are retained from the supplied repository; Phase 2 adds six scroll-driven content scenes after frame 12.
+Mobile-first React / TypeScript / Vite invitation. **This revision is a delta patch on top of the Phase 3 staggered-reveals patch**, which itself followed Phase 2. It leaves the splash, envelope, WebP opening frames, ceremony images and photographs unchanged.
 
-## Run
+## Run locally / on a phone
 
 ```powershell
 npm install
+npm run typecheck
 npm run dev
 ```
 
-Use the LAN URL on a phone connected to the same Wi-Fi; browsers/devices without working GPU animations may show reduced or choppy effects. To check changes before committing:
+Open Vite's network/tunnel address on the phone. No extra animation dependencies are required.
 
-```powershell
-npm run typecheck
-npm run build
-```
+## Corrected scroll experience (Phase 4)
 
-## Experience
+The full-frame-12 background remains fixed. Once Pilupu finishes its original staggered Ganesha → Shiva-Parvati → title introduction, native scrolling begins.
 
-1. **Splash:** grounded image fades in and out; decorative loading line fills.
-2. **Cover:** drops from above; the Open Card button settles beneath it.
-3. **Opening:** frames 02–03 grounded, 04–05 approach, 06–12 fill the viewport. Frame 12 becomes the stationary page background.
-4. **Pilupu:** deity illustrations fade in, then the Telugu title. Scrolling unlocks after the intro reveal.
-5. **Groom:** photograph bottom-left, groom's names and parents top-right.
-6. **Bride:** photograph bottom-right, bride's names and parents top-left.
-7. **Vivahamu:** couple portrait centered above the traditional panigrahanam emblem and bilingual date motif.
-8. **Venue:** muhurtham, venue, dinner details centered.
-9. **Final credits:** Telugu slokam and English invitation line; after the final petal fall, a centered Replay control appears.
+**The scroll position itself controls every later entrance and exit.** It is *not* a trigger for an automatic reveal animation. Each word, heading, curtain, date ornament and photo frame has its own overlapping scroll range:
 
-The five subsequent content sections remain within one native scrolling experience. Each full-screen scene is scaled **as a single group from its center** according to continuous scroll position—not as three discrete stages or as independently positioned elements. The stationary background does not scroll with these scenes. A new scene appears at half scale (approximately 25% of its final area) and increases smoothly; a leaving scene moves toward the viewer and fades.
+1. A title approaches from near the viewport center, small, faint and blurred.
+2. Before it has finished approaching, the next words or elements begin approaching with short, overlapping offsets.
+3. Each element stops at its intended layout position when its own entrance finishes. All stay settled together for a shared interval after the last arrives.
+4. Scrolling farther makes the title leave first. Other elements begin departing shortly afterward, overlapping in the same order; the photograph leaves last.
+5. After all content is gone there is a clear empty gap before the next scene begins approaching.
 
-The bottom-left **తెలుగు / English** toggle appears from Groom through Venue; only one language's content is shown at a time. Replay is a bottom-right icon until Final Credits, where it becomes a centered icon with text after the scene has settled.
+Lifting your finger leaves each element at its actual scroll-progress position (subject to ordinary browser momentum). Reverse scrolling reverses the motion, including word-level depth and photo reveal. There are no snapping points and no timed auto-completion. All six scenes retain their Phase 3 content and positions: Pilupu, Groom, Bride, Vivahamu, Venue and Final Credits. The Telugu/English control continues to work without rewinding the current progress.
 
-### Petal trigger rules
+The photo frames enter empty; close to the settled point, the real photos reveal progressively with glints, controlled by scroll rather than a timer. The date ornament remains centered without a Panigrahanam image, and the two-line Telugu slokam remains in the final scene.
 
-- The intro's first petals are created once its text is visible; subsequent batches spawn when a **different** section reaches its scrolling midpoint.
-- Brief reverse scrolling within the same focused section creates no new batch. Returning after a different section midpoint creates a **new** batch; old petals are never regenerated.
-- Previously spawned petals continue floating left or right until naturally off-screen. Scrolling makes them drift faster but does not reinitialize them.
-- The petal layer is a lightweight canvas above the stationary page background, independent of section scale/scroll transforms. `prefers-reduced-motion` reduces the activity.
+## Petals and controls
 
-### Files to tune
+The persistent petal canvas is independent of scene transforms. A fresh petal burst is generated when a *different* section reaches its settled focal point; earlier petals keep drifting naturally and gain speed during scrolling. Returning to a section without first focusing another one does not re-trigger it. The initial Pilupu burst still follows its timed introduction. Pilupu's idle scroll hint is displayed after about five seconds without scrolling, disappears on movement, and can reappear while the user remains there.
 
-- `src/InvitationExperience.tsx`: `INCOMING_SCALE`, `OUTGOING_SCALE`, `MIDPOINT_TOLERANCE`, section content, petal simulation and timings.
-- `src/InvitationExperience.css`: responsive card placement, text sizing, language/replay controls.
-- `src/App.tsx` / `src/styles.css`: original splash, cover, opening frames and frame-12 background.
+The language toggle appears from Groom through Venue. The replay icon is available until Final Credits; after the final petal burst, a centered button with the Replay label appears.
 
-Assets in `public/images/groom.webp`, `bride.webp`, `couple.webp` are optimized from the user's latest supplied **real photographs**, with their 3:4 / 3:4 / 4:3 proportions. `public/images/ceremony/` contains transparent extracts of the supplied panigrahanam and date ornaments.
+## Motion settings to tune
 
-This is a public website: suppressing long-press, text selection and drag interactions is a presentation feature and cannot prevent image saving or screenshots.
+In `src/InvitationExperience.tsx`, all distances below are **viewport-height scroll distances**, not literal Z-axis values or discrete stages:
 
-## Apply a delta patch
+| Constant | Meaning |
+|---|---|
+| `FIRST_SCENE_SPAN = 2.2` | Scroll distance between Pilupu and Groom |
+| `SCENE_SPAN = 4.5` | Scroll distance allotted per subsequent section |
+| `INCOMING_SCALE = 0.32` | Size of an item when it first starts entering at the screen center |
+| `ENTER_STAGGER = 0.94` | How far apart the first and last items begin entering |
+| `ENTER_DURATION = 0.9` | Scroll distance for each item's approach |
+| `EXIT_BEGIN = 2.35` | When the first outgoing item starts leaving |
+| `EXIT_STAGGER = 0.74` | How far apart first and last items begin leaving |
+| `EXIT_DURATION = 0.79` | Scroll distance for each item's departure |
+| `OUTGOING_SCALE = 2.2` | Size an item grows toward when leaving |
+| `WORD_ORDER_GAP = 0.21` | Relative offset between successive words in a line |
 
-The distributed patch ZIP is based on the user's uploaded `wedding-invitation-A_C.zip`. Extract **into that existing repository root**, preserving paths; overwrite only the included files. There is no top-level folder in the patch and no deletions. Preserve any unrelated local changes when merging.
+The last item finishes entering at approximately `1.84` viewport heights into a section; the first starts leaving at `2.35`, providing a shared hold. All outgoing items are gone at around `3.88`, with an approximately `0.62` viewport-height blank transition before the next section begins.
+
+**For a quicker experience**, reduce the incoming/outgoing durations and the matching `SCENE_SPAN` together; avoid setting `SCENE_SPAN` lower than the last exit completion or overlap will return. Motion is driven in `applyMotion()` and is measured from actual browser element positions, making it responsive rather than relying on fixed pixel offsets.
+
+## Applying the Phase 4 patch
+
+**Required baseline:** your current working project must already have `wedding-invitation-A_C-phase3-staggered-reveals-patch.zip` applied on top of Phase 2.
+
+Extract this Phase 4 delta ZIP at repository root, preserving the file paths. Only the files in the patch manifest are modified; do not reapply the original repository ZIP afterward. There are no deletions.

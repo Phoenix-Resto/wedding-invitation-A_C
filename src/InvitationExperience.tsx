@@ -1,154 +1,162 @@
-import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import './InvitationExperience.css';
 
 type Language = 'te' | 'en';
 type SceneId = 'pilupu' | 'groom' | 'bride' | 'vivahamu' | 'venue' | 'final';
 const SCENES: SceneId[] = ['pilupu', 'groom', 'bride', 'vivahamu', 'venue', 'final'];
 
-// This is a continuous scroll curve, NOT three discrete animation stages.
-// At -1 screen distance a new scene occupies about a quarter of the viewport
-// area; at 0 it is full size; at +1 it has moved past the viewer.
-const INCOMING_SCALE = 0.5;
-const OUTGOING_SCALE = 2.05;
-const MIDPOINT_TOLERANCE = 0.16;
-const FIRST_SCENE_REVEAL_MS = 2900;
-const FINAL_PETAL_SETTLE_MS = 3400;
+/**
+ * Scroll distances are in viewport heights. These values are not keyframes:
+ * every DOM element is interpolated continuously from the native scrollTop.
+ * Incoming ranges overlap, all arrivals finish before exits begin, and there
+ * is an empty interval before the next scene starts.
+ */
+const FIRST_SCENE_SPAN = 2.2;
+const SCENE_SPAN = 4.5;
+const INCOMING_SCALE = 0.32;
+const OUTGOING_SCALE = 2.2;
+const ENTER_STAGGER = 0.94;
+const ENTER_DURATION = 0.9;
+const EXIT_BEGIN = 2.35;
+const EXIT_STAGGER = 0.74;
+const EXIT_DURATION = 0.79;
+const FIRST_EXIT_BEGIN = 0.14;
+const FIRST_EXIT_STAGGER = 0.34;
+const FIRST_EXIT_DURATION = 1.12;
+const FOCUS_AT = 2.16;
+const FINAL_PETAL_SETTLE_MS = 4200;
+const PILUPU_INTRO_MS = 8000;
+const WORD_ORDER_GAP = 0.21;
+const TOTAL_SCROLL_UNITS = FIRST_SCENE_SPAN + (SCENES.length - 2) * SCENE_SPAN + FOCUS_AT;
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+const smooth = (n: number) => { const x = clamp01(n); return x * x * (3 - 2 * x); };
+const sceneStart = (index: number) => index === 0 ? 0 : FIRST_SCENE_SPAN + (index - 1) * SCENE_SPAN;
 
-const clamp01 = (number: number) => Math.min(1, Math.max(0, number));
-const ease = (number: number) => {
-  const x = clamp01(number);
-  return x * x * (3 - 2 * x);
-};
+type MotionElement = { node: HTMLElement; order: number; relX: number; relY: number; };
+type MotionScene = { holder: HTMLElement; elements: MotionElement[]; maxOrder: number; photo: HTMLElement | null; };
 
-function getScenePose(index: number, position: number): CSSProperties {
-  const distance = position - index;
-  if (distance <= -1.02 || distance >= 1.01) {
-    return { opacity: 0, visibility: 'hidden', transform: 'translate3d(0, 0, 0) scale(.5)' };
-  }
-
-  if (distance <= 0) {
-    const arrival = ease(distance + 1);
-    return {
-      opacity: ease((distance + 0.92) / 0.82),
-      // Transform ONLY the scene parent: all four quadrants naturally move
-      // outward relative to the viewport center as the scene grows.
-      transform: `translate3d(0, 0, 0) scale(${INCOMING_SCALE + (1 - INCOMING_SCALE) * arrival})`,
-      visibility: 'visible',
-    };
-  }
-
-  const departure = ease(distance);
-  return {
-    opacity: 1 - ease((distance - 0.18) / 0.66),
-    transform: `translate3d(0, 0, 0) scale(${1 + (OUTGOING_SCALE - 1) * departure})`,
-    visibility: 'visible',
-  };
+function InvitationImage({ src, alt, className = '', order }: { src: string; alt: string; className?: string; order?: number }) {
+  return <img className={`${className} ${order === undefined ? '' : 'inv-motion'}`} data-motion-order={order} src={src} alt={alt} draggable={false} decoding="async" />;
 }
-
-function InvitationImage({ src, alt, className = '' }: { src: string; alt: string; className?: string }) {
-  return <img className={className} src={src} alt={alt} draggable={false} decoding="async" />;
+function MotionBlock({ children, order, className = '' }: { children: ReactNode; order: number; className?: string }) {
+  return <div className={`inv-motion ${className}`} data-motion-order={order}>{children}</div>;
 }
-
-function PilupuScene() {
+// Each word gets its own scroll window; no setTimeout or CSS entrance animation.
+function WordLine({ text, order, className = '' }: { text: string; order: number; className?: string }) {
   return (
-    <div className="inv-scene inv-scene--pilupu" lang="te">
-      <InvitationImage className="inv-intro__deity inv-intro__deity--left" src="/images/pilupu/god-left.webp" alt="శ్రీ గణేశుడు" />
-      <InvitationImage className="inv-intro__deity inv-intro__deity--right" src="/images/pilupu/god-right.webp" alt="పార్వతీ పరమేశ్వరులు" />
-      <InvitationImage className="inv-intro__title" src="/images/pilupu/text-center.webp" alt="కోట వారి పెళ్లిపిలుపు" />
-      <div className="inv-intro__filigree" aria-hidden="true">❧</div>
-    </div>
+    <span className={`inv-word-line ${className}`} role="text" aria-label={text}>
+      {text.trim().split(/\s+/).map((word, i) => (
+        <span className="inv-word inv-motion" data-motion-order={order + i * WORD_ORDER_GAP} key={`${i}-${word}`} aria-hidden="true">{word}</span>
+      ))}
+    </span>
   );
+}
+
+function PilupuScene({ introComplete }: { introComplete: boolean }) {
+  return <div className={`inv-scene inv-scene--pilupu ${introComplete ? 'inv-pilupu--ready' : ''}`} lang="te">
+    <InvitationImage className="inv-intro__deity inv-intro__deity--left" src="/images/pilupu/god-left.webp" alt="శ్రీ గణేశుడు" order={0} />
+    <InvitationImage className="inv-intro__deity inv-intro__deity--right" src="/images/pilupu/god-right.webp" alt="పార్వతీ పరమేశ్వరులు" order={1} />
+    <InvitationImage className="inv-intro__title" src="/images/pilupu/text-center.webp" alt="కోట వారి పెళ్లిపిలుపు" order={2} />
+  </div>;
+}
+
+function PhotoFrame({ person }: { person: 'groom' | 'bride' | 'couple' }) {
+  const couple = person === 'couple';
+  return <div className={`inv-photo-frame ${couple ? 'inv-photo-frame--couple' : ''}`} data-depth-photo="true">
+    <div className="inv-photo-frame__paper" aria-hidden="true" />
+    <InvitationImage className="inv-photo-frame__image" src={`/images/${person}.webp`} alt={couple ? 'The bride and groom' : `The ${person}`} />
+    <span className="inv-photo-frame__sparkle inv-photo-frame__sparkle--a" aria-hidden="true">✦</span>
+    <span className="inv-photo-frame__sparkle inv-photo-frame__sparkle--b" aria-hidden="true">✧</span>
+    <span className="inv-photo-frame__sparkle inv-photo-frame__sparkle--c" aria-hidden="true">✦</span>
+    {couple && <><span className="inv-photo-frame__bloom inv-photo-frame__bloom--a" aria-hidden="true" /><span className="inv-photo-frame__bloom inv-photo-frame__bloom--b" aria-hidden="true" /><span className="inv-photo-frame__bloom inv-photo-frame__bloom--c" aria-hidden="true" /></>}
+    <span className="inv-photo-frame__sheen" aria-hidden="true" />
+  </div>;
 }
 
 function PersonScene({ person, language }: { person: 'groom' | 'bride'; language: Language }) {
-  const isGroom = person === 'groom';
-  return (
-    <div className={`inv-scene inv-scene--person inv-scene--${person}`} lang={language}>
-      <div className="inv-person__portrait">
-        <InvitationImage src={`/images/${person}.webp`} alt={isGroom ? 'Photograph of the groom' : 'Photograph of the bride'} />
+  const groom = person === 'groom';
+  const header = language === 'te' ? (groom ? 'వరుడు' : 'వధువు') : (groom ? 'THE GROOM' : 'THE BRIDE');
+  const lines = language === 'en'
+    ? [
+        { text: groom ? 'Chi. Abhinav Viswateja' : 'Chi. La. Sow. Chandana', kind: 'name' },
+        { text: groom ? 'Son of' : 'Daughter of', kind: 'relation' },
+        { text: groom ? 'Sri Kota Sivaprasad' : 'Sri Siddula Sainath', kind: 'parents' },
+        { text: groom ? '& Smt. Hima Sailaja' : '& Smt. Naga Swapna', kind: 'parents' },
+      ]
+    : [
+        { text: groom ? 'శ్రీ కోట శివప్రసాద్ –' : 'శ్రీ సిద్ధుల సాయినాథ్ –', kind: 'parents' },
+        { text: groom ? 'శ్రీమతి హిమశైలజ' : 'శ్రీమతి నాగస్వప్న', kind: 'parents' },
+        { text: groom ? 'గారి జ్యేష్ఠ పుత్రుడు' : 'గారి పుత్రిక', kind: 'relation' },
+        { text: groom ? 'చి. అభినవ్ విశ్వతేజ' : 'చి. లా. సౌ. చందన', kind: 'name' },
+      ];
+  return <div className={`inv-scene inv-scene--person inv-scene--${person}`} lang={language}>
+    <div className="inv-person__layout">
+      <div className="inv-person__header"><WordLine text={header} order={0} /></div>
+      <div className="inv-person__copy">
+        {lines.map((line, index) => (
+          <div key={`${index}-${line.text}`} className={`inv-person__line inv-person__line--${line.kind}`}>
+            <WordLine text={line.text} order={1.15 + index * 1.22} />
+          </div>
+        ))}
       </div>
-      <div className="inv-person__copy" key={`${person}-${language}`}>
-        <span className="inv-kicker">{language === 'te' ? (isGroom ? 'వరుడు' : 'వధువు') : (isGroom ? 'THE GROOM' : 'THE BRIDE')}</span>
-        {language === 'en' ? (
-          <>
-            <h2>{isGroom ? 'Chi. Abhinav Viswateja' : 'Chi. La. Sow. Chandana'}</h2>
-            <span className="inv-copy-divider" aria-hidden="true" />
-            <p className="inv-relationship">{isGroom ? 'Son of' : 'Daughter of'}</p>
-            <p className="inv-parent-names">{isGroom ? 'Sri Kota Sivaprasad' : 'Sri Siddula Sainath'}<span> &amp; </span>{isGroom ? 'Smt. Hima Sailaja' : 'Smt. Naga Swapna'}</p>
-          </>
-        ) : (
-          <>
-            <p className="inv-parent-names inv-parent-names--telugu">
-              {isGroom ? 'శ్రీ కోట శివప్రసాద్ – శ్రీమతి హిమశైలజ' : 'శ్రీ సిద్ధుల సాయినాథ్ – శ్రీమతి నాగస్వప్న'}
-            </p>
-            <p className="inv-relationship">{isGroom ? 'గారి జ్యేష్ఠ పుత్రుడు' : 'గారి పుత్రిక'}</p>
-            <span className="inv-copy-divider" aria-hidden="true" />
-            <h2>{isGroom ? 'చి. అభినవ్ విశ్వతేజ' : 'చి. లా. సౌ. చందన'}</h2>
-          </>
-        )}
-      </div>
+      <MotionBlock className="inv-person__portrait" order={7.65}><PhotoFrame person={person} /></MotionBlock>
     </div>
-  );
+  </div>;
 }
 
 function VivahamuScene({ language }: { language: Language }) {
-  return (
-    <div className="inv-scene inv-scene--vivahamu" lang={language}>
-      <div className="inv-ceremony__portrait">
-        <InvitationImage src="/images/couple.webp" alt="Photograph of the couple" />
+  return <div className="inv-scene inv-scene--vivahamu" lang={language}>
+    <div className="inv-ceremony__layout">
+      <div className="inv-ceremony__heading"><WordLine text={language === 'te' ? 'వివాహ మహోత్సవము' : 'Our Wedding'} order={0} /></div>
+      <MotionBlock className="inv-ceremony__portrait" order={1.15}><PhotoFrame person="couple" /></MotionBlock>
+      <div className="inv-ceremony__date">
+        <div className="inv-ceremony__month"><WordLine text={language === 'te' ? 'డిసెంబర్' : 'December'} order={3.65} /></div>
+        <MotionBlock className="inv-ceremony__date-ornament" order={3.3}><InvitationImage src="/images/ceremony/date-ornament.webp" alt="12 2026" /></MotionBlock>
+        <div className="inv-ceremony__weekday"><WordLine text={language === 'te' ? 'స్థిరవారం' : 'Saturday'} order={3.95} /></div>
       </div>
-      <h2 className="inv-ceremony__heading">{language === 'te' ? 'వివాహ మహోత్సవము' : 'Our Wedding'}</h2>
-      <div className="inv-ceremony__emblem">
-        <InvitationImage src="/images/ceremony/panigrahanam.webp" alt="Traditional panigrahanam wedding emblem with the couple’s names" />
-      </div>
-      <div className="inv-ceremony__date" aria-label={language === 'te' ? 'శనివారం, 12 డిసెంబర్ 2026' : 'Saturday, 12 December 2026'}>
-        <span className="inv-ceremony__month">{language === 'te' ? 'డిసెంబర్' : 'December'}</span>
-        <div className="inv-ceremony__date-ornament">
-          <InvitationImage src="/images/ceremony/date-ornament.webp" alt="12, 2026" />
-        </div>
-        <span className="inv-ceremony__weekday">{language === 'te' ? 'శనివారం' : 'Saturday'}</span>
-      </div>
-      <p className="inv-ceremony__time">{language === 'te' ? 'సాయంత్రం 7:45 నుండి 9:30 వరకు' : '7:45 PM – 9:30 PM'}</p>
+      <div className="inv-ceremony__time"><WordLine text={language === 'te' ? 'సాయంత్రం 7:45 నుండి రాత్రి 9:30 వరకు' : 'Between 7:45 PM and 9:30 PM'} order={5} /></div>
     </div>
-  );
+  </div>;
 }
 
+function CurtainDrawing() {
+  return <svg viewBox="0 0 360 236" preserveAspectRatio="none" aria-hidden="true" className="inv-venue__curtain-svg">
+    <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 228 V8 H355 V228" />
+      <path d="M12 225 C26 150 24 99 26 17 M22 226 C37 150 37 95 38 17 M34 226 C47 159 48 91 50 17 M349 225 C334 150 336 99 334 17 M338 225 C323 150 323 95 322 17 M326 225 C313 159 312 91 310 17" />
+      <path d="M48 15 Q70 53 92 15 Q114 53 136 15 Q158 53 180 15 Q202 53 224 15 Q246 53 268 15 Q290 53 312 15" />
+      <path d="M48 18 Q70 64 92 18 Q114 64 136 18 Q158 64 180 18 Q202 64 224 18 Q246 64 268 18 Q290 64 312 18" />
+      <path d="M48 21 Q70 73 92 21 Q114 73 136 21 Q158 73 180 21 Q202 73 224 21 Q246 73 268 21 Q290 73 312 21" />
+      <path d="M6 116 Q20 121 35 116 M325 116 Q340 121 354 116" strokeWidth="3" />
+    </g>
+  </svg>;
+}
 function VenueScene({ language }: { language: Language }) {
-  return (
-    <div className="inv-scene inv-scene--venue" lang={language}>
-      <div className="inv-venue__content" key={`venue-${language}`}>
-        <span className="inv-kicker">{language === 'te' ? 'శుభ వివాహ వేడుక' : 'THE CELEBRATION'}</span>
-        <h2>{language === 'te' ? 'శుభ ముహూర్తము' : 'Muhurtham'}</h2>
-        <p className="inv-venue__important">{language === 'te' ? 'శనివారం, 12 డిసెంబర్ 2026' : 'Saturday, 12 December 2026'}</p>
-        <p>{language === 'te' ? 'సాయంత్రం 7:45 నుండి రాత్రి 9:30 వరకు' : 'Between 7:45 PM and 9:30 PM'}</p>
-        <p>{language === 'te' ? 'పుష్కర కాలం: రాత్రి 8:27' : 'Pushkara Kalam: 8:27 PM'}</p>
-        <p className="inv-venue__secondary">{language === 'te' ? 'ఉత్తరాషాఢ నక్షత్రం, కర్కాటక లగ్నం' : 'Uttarashada Nakshatram · Karkataka Lagnam'}</p>
-        <span className="inv-venue__ornament" aria-hidden="true">❧</span>
-        <h2>{language === 'te' ? 'కళ్యాణ వేదిక' : 'Wedding Venue'}</h2>
-        <p className="inv-venue__important">{language === 'te' ? 'T.G.K. కళ్యాణ మండపము' : 'T.G.K. Kalyana Mandapam'}</p>
-        <p>{language === 'te' ? 'బుర్రిపాలెం రోడ్, తెనాలి' : 'Burripalem Road, Tenali'}</p>
-        <span className="inv-venue__ornament" aria-hidden="true">❧</span>
-        <h3>{language === 'te' ? 'విందు భోజనము' : 'Dinner'}</h3>
-        <p>{language === 'te' ? 'రాత్రి 8:00 గంటల నుండి' : '8:00 PM onwards'}</p>
+  return <div className="inv-scene inv-scene--venue" lang={language}>
+    <div className="inv-venue__layout">
+      <div className="inv-venue__heading"><WordLine text={language === 'te' ? 'కళ్యాణ వేదిక' : 'Wedding Venue'} order={0} /></div>
+      <div className="inv-venue__curtains">
+        <MotionBlock className="inv-venue__curtain-layer" order={1.25}><CurtainDrawing /></MotionBlock>
+        <div className="inv-venue__address">
+          <div className="inv-venue__address-main"><WordLine text={language === 'te' ? 'T.G.K. కళ్యాణ మండపము' : 'T.G.K. Kalyana Mandapam'} order={2.65} /></div>
+          <div className="inv-venue__address-sub"><WordLine text={language === 'te' ? 'బుర్రిపాలెం రోడ్, తెనాలి' : 'Burripalem Road, Tenali'} order={4} /></div>
+        </div>
       </div>
+      <div className="inv-venue__dinner-heading"><WordLine text={language === 'te' ? 'విందు భోజనము' : 'Dinner'} order={5.6} /></div>
+      <div className="inv-venue__dinner-time"><WordLine text={language === 'te' ? 'రాత్రి 8:00 గంటల నుండి' : '8:00 PM onwards'} order={6.7} /></div>
     </div>
-  );
+  </div>;
 }
-
 function FinalScene() {
-  return (
-    <div className="inv-scene inv-scene--final">
+  return <div className="inv-scene inv-scene--final">
+    <div className="inv-final__layout">
       <div className="inv-final__slokam" lang="te">
-        <span className="inv-final__ornament" aria-hidden="true">❧</span>
-        <p>వాగర్థావివ సంపృక్తౌ<br />వాగర్థప్రతిపత్తయే ।<br />జగతః పితరౌ వందే<br />పార్వతీపరమేశ్వరౌ ॥</p>
+        <div className="inv-final__slokam-line"><WordLine text="వాగర్థావివ సంపృక్తౌ వాగర్థ ప్రతిపత్తయే ।" order={0} /></div>
+        <div className="inv-final__slokam-line"><WordLine text="జగతః పితరౌ వందే పార్వతీ పరమేశ్వరౌ ॥" order={2.1} /></div>
       </div>
-      <div className="inv-final__invitation" lang="en">
-        <p>We solicit your gracious presence with family and friends on the auspicious occasion of the marriage.</p>
-        <span>With best compliments from</span>
-        <strong>Near &amp; Dear</strong>
-      </div>
+      <div className="inv-final__invitation" lang="en"><WordLine text="We solicit your gracious presence with family and friends on the auspicious occasion of the marriage." order={5} /></div>
     </div>
-  );
+  </div>;
 }
 
 type Petal = {
@@ -157,9 +165,6 @@ type Petal = {
   age: number; fallTime: number; falling: boolean; sway: number; alpha: number;
 };
 
-// The canvas is intentionally persistent across sections. Batches never reset or
-// get re-used; older petals drift off the viewport naturally, with extra breeze
-// while the user scrolls. Only canvas pixels are redrawn each animation frame.
 function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy: RefObject<number> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const petalsRef = useRef<Petal[]>([]);
@@ -172,8 +177,8 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
     if (!ctx) return;
     let animationId = 0;
     let last = 0;
-    let reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reduced = motionQuery.matches;
     const updateMotion = () => { reduced = motionQuery.matches; };
     motionQuery.addEventListener?.('change', updateMotion);
 
@@ -230,11 +235,11 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
         ctx.shadowColor = 'rgba(109, 60, 57, .16)';
         ctx.shadowBlur = apparentSize * 0.4;
         ctx.shadowOffsetY = apparentSize * 0.17;
-        const petalGradient = ctx.createLinearGradient(-apparentSize, -apparentSize, apparentSize, apparentSize);
-        petalGradient.addColorStop(0, '#fff3e8');
-        petalGradient.addColorStop(0.55, '#edb8b6');
-        petalGradient.addColorStop(1, '#b87f85');
-        ctx.fillStyle = petalGradient;
+        const gradient = ctx.createLinearGradient(-apparentSize, -apparentSize, apparentSize, apparentSize);
+        gradient.addColorStop(0, '#fff3e8');
+        gradient.addColorStop(0.55, '#edb8b6');
+        gradient.addColorStop(1, '#b87f85');
+        ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.moveTo(-apparentSize * 0.48, apparentSize * 0.15);
         ctx.quadraticCurveTo(-apparentSize * 0.6, -apparentSize * 0.75, apparentSize * 0.56, -apparentSize * 0.36);
@@ -275,126 +280,271 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
         alpha: 0.5 + Math.random() * 0.36,
       };
     });
-    // Never discard a previously fallen bunch; each petal remains until it
-    // drifts naturally beyond the canvas edges.
     petalsRef.current.push(...batch);
   }, [burst]);
 
   return <canvas ref={canvasRef} className="inv-petals-canvas" aria-hidden="true" />;
 }
 
+
+// Offset measurements are made with the transforms removed. This gives every
+// word and photo its real destination position, including after language swaps
+// and orientation changes. The far-away start is the VIEWPORT center.
+function measureScenes(holders: HTMLElement[]): MotionScene[] {
+  return holders.map((holder) => {
+    const nodes = Array.from(holder.querySelectorAll<HTMLElement>('[data-motion-order]'));
+    const preserved = nodes.map((node) => node.style.transform);
+    nodes.forEach((node) => { node.style.transform = 'none'; });
+    const stage = holder.getBoundingClientRect();
+    const elements = nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return {
+        node,
+        order: Number(node.dataset.motionOrder || 0),
+        relX: box.left + box.width / 2 - (stage.left + stage.width / 2),
+        relY: box.top + box.height / 2 - (stage.top + stage.height / 2),
+      };
+    });
+    nodes.forEach((node, index) => { node.style.transform = preserved[index]; });
+    return {
+      holder,
+      elements,
+      maxOrder: Math.max(1, ...elements.map((element) => element.order)),
+      photo: holder.querySelector<HTMLElement>('[data-depth-photo]'),
+    };
+  });
+}
+
+function applyMotion(element: MotionElement, inProgress: number, outProgress: number, reduced: boolean) {
+  const enter = smooth(inProgress);
+  const leave = smooth(outProgress);
+  const scale = reduced ? 1 : (INCOMING_SCALE + (1 - INCOMING_SCALE) * enter) * (1 - leave) + OUTGOING_SCALE * leave;
+  // Parent is not zoomed. A child's final location is fixed by grid layout.
+  // On entry translate from the center; on exit continue outwards with scale.
+  const x = reduced ? 0 : -element.relX * (1 - enter) + element.relX * .35 * leave;
+  const y = reduced ? 0 : -element.relY * (1 - enter) + element.relY * .35 * leave;
+  const opacity = clamp01(enter * (1 - leave));
+  const blur = reduced ? 0 : (1 - enter) * 7 + leave * 4;
+  element.node.style.opacity = `${opacity}`;
+  element.node.style.transform = `translate3d(${x.toFixed(2)}px,${y.toFixed(2)}px,0) scale(${scale.toFixed(4)})`;
+  element.node.style.filter = `blur(${blur.toFixed(2)}px)`;
+}
+
+function applyPhotoReveal(photo: HTMLElement | null, local: number) {
+  if (!photo) return;
+  // Frame appears empty first. Its photograph is scrubbed into view near the
+  // end of the final frame's arrival; rewinding scroll reverses the reveal.
+  const amount = smooth((local - 1.62) / 0.45);
+  const image = photo.querySelector<HTMLElement>('.inv-photo-frame__image');
+  if (image) {
+    image.style.opacity = `${amount}`;
+    image.style.clipPath = `inset(${((1 - amount) * 95).toFixed(2)}% 0 0 0)`;
+    image.style.filter = `blur(${((1 - amount) * 6).toFixed(2)}px)`;
+  }
+  const sparkle = Math.sin(amount * Math.PI) ** 2;
+  photo.style.setProperty('--photo-sparkle', `${sparkle}`);
+  photo.style.setProperty('--photo-bloom', `${amount}`);
+}
+
 export default function InvitationExperience({ onReplay }: { onReplay: () => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const lastScrollTop = useRef(0);
-  const currentMidpoint = useRef(-1);
+  const holderRefs = useRef<HTMLElement[]>([]);
+  const metrics = useRef<MotionScene[]>([]);
+  const raf = useRef(0);
+  const scrollUnit = useRef(0);
+  const previousTop = useRef(0);
+  const lastFocus = useRef(-1);
+  const finalAtRest = useRef(false);
   const scrollEnergy = useRef(0);
-  const animationFrame = useRef(0);
-  const [position, setPosition] = useState(0);
-  const [language, setLanguage] = useState<Language>('te');
+  const hintTimer = useRef<number | undefined>(undefined);
+  const finalTimer = useRef<number | undefined>(undefined);
   const [introComplete, setIntroComplete] = useState(false);
+  const [language, setLanguage] = useState<Language>('te');
   const [burst, setBurst] = useState(0);
-  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const [activeScene, setActiveScene] = useState(0);
+  const [showHint, setShowHint] = useState(false);
   const [finalReplayReady, setFinalReplayReady] = useState(false);
+  const [finalFocused, setFinalFocused] = useState(false);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setIntroComplete(true), FIRST_SCENE_REVEAL_MS);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  const updateScroll = () => {
-    const scroll = scrollRef.current;
-    if (!scroll || animationFrame.current) return;
-    const delta = Math.abs(scroll.scrollTop - lastScrollTop.current);
-    lastScrollTop.current = scroll.scrollTop;
-    scrollEnergy.current = Math.max(scrollEnergy.current, Math.min(3.1, delta / 18));
-    animationFrame.current = requestAnimationFrame(() => {
-      animationFrame.current = 0;
-      const next = scroll.scrollTop / Math.max(scroll.clientHeight, 1);
-      setPosition(Math.min(SCENES.length - 1, Math.max(0, next)));
-    });
+  const scheduleHint = () => {
+    window.clearTimeout(hintTimer.current);
+    setShowHint(false);
+    if (!introComplete || scrollUnit.current > .28) return;
+    hintTimer.current = window.setTimeout(() => {
+      if (scrollUnit.current <= .28) setShowHint(true);
+    }, 5000);
   };
 
-  useEffect(() => () => window.cancelAnimationFrame(animationFrame.current), []);
+  const draw = () => {
+    const scroll = scrollRef.current;
+    if (!scroll || metrics.current.length !== SCENES.length) return;
+    const units = scroll.scrollTop / Math.max(1, scroll.clientHeight);
+    scrollUnit.current = units;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let active = 0;
+    metrics.current.forEach((scene, index) => {
+      const local = units - sceneStart(index);
+      if (index > 0 && units >= sceneStart(index)) active = index;
+      const last = index === SCENES.length - 1;
+      const inRange = index === 0 ? local < FIRST_SCENE_SPAN : local >= -0.06 && (last || local <= 4.0);
+      scene.holder.style.visibility = inRange ? 'visible' : 'hidden';
+      if (!inRange) return;
 
-  // Only crossing a NEW section's focus point allows an earlier section to
-  // trigger another FRESH bunch. Reverse scrolling within a section does not.
-  useEffect(() => {
-    if (!introComplete) return;
-    const nearest = Math.round(position);
-    if (Math.abs(position - nearest) > MIDPOINT_TOLERANCE) return;
-    if (nearest === currentMidpoint.current) return;
-    currentMidpoint.current = nearest;
-    setFocusedIndex(nearest);
-    setBurst((value) => value + 1);
-  }, [introComplete, position]);
+      // Initial Pilupu entrance plays on opening, then its EXIT is scrubbed.
+      // The other five sections are entirely scroll-scrubbed both ways.
+      if (index === 0 && !introComplete) return;
+      for (const element of scene.elements) {
+        const order = element.order / scene.maxOrder;
+        if (index === 0) {
+          const outgoing = (local - (FIRST_EXIT_BEGIN + order * FIRST_EXIT_STAGGER)) / FIRST_EXIT_DURATION;
+          applyMotion(element, 1, outgoing, reduced);
+        } else {
+          const entering = (local - order * ENTER_STAGGER) / ENTER_DURATION;
+          const outgoing = last ? 0 : (local - EXIT_BEGIN - order * EXIT_STAGGER) / EXIT_DURATION;
+          applyMotion(element, entering, outgoing, reduced);
+        }
+      }
+      if (index > 0) applyPhotoReveal(scene.photo, local);
+    });
+    setActiveScene((previous) => previous === active ? previous : active);
 
-  const atFinalMidpoint = Math.abs(position - (SCENES.length - 1)) <= 0.22;
-  useEffect(() => {
-    if (focusedIndex !== SCENES.length - 1 || !atFinalMidpoint) {
-      setFinalReplayReady(false);
-      return;
+    // Persistent petals: a new burst only after a DIFFERENT section reaches
+    // its resting center. Old petals are never reused or restarted.
+    if (introComplete) {
+      const inPilupu = units <= .035;
+      const newFocus = inPilupu ? 0 : SCENES.findIndex((_, i) => i > 0 && Math.abs(units - sceneStart(i) - FOCUS_AT) <= .12);
+      if (newFocus >= 0 && newFocus !== lastFocus.current) {
+        lastFocus.current = newFocus;
+        setBurst((previous) => previous + 1);
+        if (newFocus !== SCENES.length - 1) {
+          window.clearTimeout(finalTimer.current);
+          finalAtRest.current = false;
+          setFinalReplayReady(false);
+        }
+      }
+      // The final Replay control needs its own *hold* check. Moving back
+      // before the words settle cancels the delay but never reuses petals.
+      const lastStart = sceneStart(SCENES.length - 1);
+      const restingFinal = units >= lastStart + FOCUS_AT - .10;
+      setFinalFocused((previous) => previous === restingFinal ? previous : restingFinal);
+      if (restingFinal && lastFocus.current === SCENES.length - 1 && !finalAtRest.current) {
+        finalAtRest.current = true;
+        window.clearTimeout(finalTimer.current);
+        finalTimer.current = window.setTimeout(() => setFinalReplayReady(true), FINAL_PETAL_SETTLE_MS);
+      } else if (!restingFinal && finalAtRest.current) {
+        finalAtRest.current = false;
+        window.clearTimeout(finalTimer.current);
+        setFinalReplayReady(false);
+      }
     }
-    const timer = window.setTimeout(() => setFinalReplayReady(true), FINAL_PETAL_SETTLE_MS);
+  };
+
+  const scheduleDraw = () => {
+    if (raf.current) return;
+    raf.current = window.requestAnimationFrame(() => { raf.current = 0; draw(); });
+  };
+  const onScroll = () => {
+    const top = scrollRef.current?.scrollTop ?? 0;
+    const delta = Math.abs(top - previousTop.current);
+    previousTop.current = top;
+    if (delta > .05) {
+      scrollEnergy.current = Math.max(scrollEnergy.current, Math.min(3.1, delta / 18));
+      setShowHint(false);
+      window.clearTimeout(hintTimer.current);
+      // Restart the idle prompt only if still on the first page.
+      if (introComplete) scheduleHint();
+    }
+    scheduleDraw();
+  };
+
+  // Measure the real destinations after React lays out each language's text.
+  useLayoutEffect(() => {
+    const refresh = () => {
+      metrics.current = measureScenes(holderRefs.current);
+      scheduleDraw();
+    };
+    refresh();
+    const observer = new ResizeObserver(refresh);
+    holderRefs.current.forEach((node) => observer.observe(node));
+    // If a WebP loads after initial layout, recompute the destination centers.
+    const images = holderRefs.current.flatMap((node) => Array.from(node.querySelectorAll('img')));
+    images.forEach((image) => image.addEventListener('load', refresh));
+    window.addEventListener('resize', refresh);
+    return () => {
+      // The pending frame belongs to this measurement cycle. Clear its ID
+      // before StrictMode/layout-effect remounts try to schedule the next one.
+      if (raf.current) {
+        window.cancelAnimationFrame(raf.current);
+        raf.current = 0;
+      }
+      observer.disconnect();
+      images.forEach((image) => image.removeEventListener('load', refresh));
+      window.removeEventListener('resize', refresh);
+    };
+  }, [language, introComplete]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setIntroComplete(true);
+      lastFocus.current = 0;
+      setBurst((previous) => previous + 1);
+    }, PILUPU_INTRO_MS);
     return () => window.clearTimeout(timer);
-  }, [focusedIndex, atFinalMidpoint]);
+  }, []);
+  useEffect(() => {
+    if (introComplete) scheduleHint();
+    return () => window.clearTimeout(hintTimer.current);
+  }, [introComplete]);
+  useEffect(() => () => {
+    // React StrictMode cleans up and re-runs effects in development. A canceled
+    // request must release its ID; otherwise scheduleDraw() sees a nonzero ID
+    // forever and none of the scroll-controlled scenes can render.
+    if (raf.current) {
+      window.cancelAnimationFrame(raf.current);
+      raf.current = 0;
+    }
+    window.clearTimeout(hintTimer.current);
+    window.clearTimeout(finalTimer.current);
+  }, []);
 
-  const showingFinal = position > 4.68;
-  const showLanguage = introComplete && position > 0.58 && !showingFinal;
-  const showCornerReplay = !showingFinal;
-
-  return (
-    <div className="inv-experience" aria-label="Wedding invitation details">
-      <div className="inv-scene-stage" aria-live="off">
-        {SCENES.map((id, index) => (
-          <section
-            key={id}
-            className={`inv-scene-holder inv-scene-holder--${id}`}
-            style={{ ...getScenePose(index, position), zIndex: SCENES.length - index }}
-            aria-hidden={Math.abs(position - index) > 0.55}
-          >
-            {id === 'pilupu' && <PilupuScene />}
-            {id === 'groom' && <PersonScene person="groom" language={language} />}
-            {id === 'bride' && <PersonScene person="bride" language={language} />}
-            {id === 'vivahamu' && <VivahamuScene language={language} />}
-            {id === 'venue' && <VenueScene language={language} />}
-            {id === 'final' && <FinalScene />}
-          </section>
-        ))}
-      </div>
-      <PersistentPetals burst={burst} scrollEnergy={scrollEnergy} />
-
-      <div
-        ref={scrollRef}
-        className={`inv-scroll-viewport ${introComplete ? 'inv-scroll-viewport--enabled' : ''}`}
-        onScroll={updateScroll}
-        tabIndex={introComplete ? 0 : -1}
-        role="region"
-        aria-label="Scroll through the wedding invitation sections"
-        aria-disabled={!introComplete}
-      >
-        <div className="inv-scroll-track" aria-hidden="true">
-          {SCENES.map((id) => <div key={id} className="inv-scroll-stop" />)}
-        </div>
-      </div>
-
-      <div className="inv-controls" aria-label="Invitation controls">
-        <div className={`inv-language-toggle ${showLanguage ? 'inv-control--shown' : ''}`} aria-label="Invitation language">
-          <button className={language === 'te' ? 'is-active' : ''} aria-pressed={language === 'te'} onClick={() => setLanguage('te')} type="button" tabIndex={showLanguage ? 0 : -1}>తెలుగు</button>
-          <span aria-hidden="true">|</span>
-          <button className={language === 'en' ? 'is-active' : ''} aria-pressed={language === 'en'} onClick={() => setLanguage('en')} type="button" tabIndex={showLanguage ? 0 : -1}>English</button>
-        </div>
-        {showCornerReplay && (
-          <button className="inv-replay inv-replay--corner" onClick={onReplay} type="button" aria-label="Replay invitation" title="Replay invitation">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg>
-          </button>
-        )}
-        {showingFinal && finalReplayReady && (
-          <button className="inv-replay inv-replay--final" onClick={onReplay} type="button">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg>
-            <span>Replay</span>
-          </button>
-        )}
-      </div>
+  // Keep the earlier controls while the last scene approaches; switch only
+  // when its final words have settled and the petal-focus point is reached.
+  const showingFinal = activeScene === SCENES.length - 1 && finalFocused;
+  const showLanguage = introComplete && activeScene > 0 && !showingFinal;
+  return <div className="inv-experience" aria-label="Wedding invitation details">
+    <div className="inv-scene-stage" aria-live="off">
+      {SCENES.map((scene, index) => (
+        <section key={scene} ref={(node) => { if (node) holderRefs.current[index] = node; }} className={`inv-scene-holder inv-scene-holder--${scene}`} aria-label={`${scene} section`}>
+          {scene === 'pilupu' && <PilupuScene introComplete={introComplete} />}
+          {scene === 'groom' && <PersonScene person="groom" language={language} />}
+          {scene === 'bride' && <PersonScene person="bride" language={language} />}
+          {scene === 'vivahamu' && <VivahamuScene language={language} />}
+          {scene === 'venue' && <VenueScene language={language} />}
+          {scene === 'final' && <FinalScene />}
+        </section>
+      ))}
     </div>
-  );
+    <PersistentPetals burst={burst} scrollEnergy={scrollEnergy} />
+    <div
+      ref={scrollRef}
+      className={`inv-scroll-viewport ${introComplete ? 'inv-scroll-viewport--enabled' : ''}`}
+      onScroll={onScroll}
+      tabIndex={introComplete ? 0 : -1}
+      role="region"
+      aria-label="Scroll through the wedding invitation sections"
+      aria-disabled={!introComplete}
+    >
+      <div className="inv-scroll-track" style={{ height: `${(TOTAL_SCROLL_UNITS + 1) * 100}dvh` }} aria-hidden="true" />
+    </div>
+    <div className={`inv-scroll-hint ${showHint && activeScene === 0 ? 'inv-scroll-hint--visible' : ''}`} aria-hidden="true"><span>Scroll to explore</span><span className="inv-scroll-hint__chevron">⌄</span></div>
+    <div className="inv-controls" aria-label="Invitation controls">
+      <div className={`inv-language-toggle ${showLanguage ? 'inv-control--shown' : ''}`} aria-label="Invitation language">
+        <button className={language === 'te' ? 'is-active' : ''} aria-pressed={language === 'te'} type="button" tabIndex={showLanguage ? 0 : -1} onClick={() => setLanguage('te')}>తెలుగు</button>
+        <span aria-hidden="true">|</span>
+        <button className={language === 'en' ? 'is-active' : ''} aria-pressed={language === 'en'} type="button" tabIndex={showLanguage ? 0 : -1} onClick={() => setLanguage('en')}>English</button>
+      </div>
+      {!showingFinal && <button className="inv-replay inv-replay--corner" onClick={onReplay} type="button" aria-label="Replay invitation" title="Replay invitation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg></button>}
+      {showingFinal && finalReplayReady && <button className="inv-replay inv-replay--final" onClick={onReplay} type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg><span>Replay</span></button>}
+    </div>
+  </div>;
 }

@@ -228,7 +228,6 @@ export default function App() {
       '/images/groom.webp',
       '/images/bride.webp',
       '/images/couple.webp',
-      '/images/ceremony/panigrahanam.webp',
       '/images/ceremony/date-ornament.webp',
     ].map((src) => {
       const image = new window.Image();
