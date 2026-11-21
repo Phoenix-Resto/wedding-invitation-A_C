@@ -7,11 +7,14 @@
   text-rendering: optimizeLegibility;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body, #root { width: 100%; height: 100%; margin: 0; }
+html, body { overscroll-behavior: none; }
 body { overflow: hidden; }
-button { font: inherit; }
-button:focus-visible { outline: 2px solid #a77d4c; outline-offset: .22rem; }
+button { font: inherit; -webkit-appearance: none; appearance: none; touch-action: manipulation; }
+/* Hide the blue touch highlight without removing keyboard accessibility. */
+button:focus:not(:focus-visible) { outline: none; }
+button:focus-visible { outline: .14rem solid #a77d4c; outline-offset: .25rem; }
 
 .invitation-app {
   position: relative;
@@ -21,20 +24,35 @@ button:focus-visible { outline: 2px solid #a77d4c; outline-offset: .22rem; }
   overflow: hidden;
   isolation: isolate;
   overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   background:
-    radial-gradient(ellipse 64% 58% at 50% 46%, rgba(255,252,244,.94), rgba(255,245,232,.46) 65%, transparent),
-    radial-gradient(ellipse at 4% 4%, #f3e4db, transparent 48%),
-    radial-gradient(ellipse at 96% 95%, #e0c8ba, transparent 51%),
-    linear-gradient(160deg, #e8d6cb 0%, #f6eee4 54%, #e4d0be 100%);
+    radial-gradient(ellipse 70% 50% at 50% 40%, rgba(255,253,246,.98), rgba(255,245,232,.48) 70%, transparent),
+    radial-gradient(ellipse 96% 26% at 49% 85%, rgba(161,119,91,.22), rgba(228,199,174,.16) 62%, transparent),
+    radial-gradient(ellipse at 3% 7%, #f1e2d7, transparent 50%),
+    radial-gradient(ellipse at 94% 91%, #dcc5b7, transparent 55%),
+    linear-gradient(160deg,#ead8cc 0%,#f8eee4 51%,#e5d2bf 100%);
 }
 
-/* Floral ambience is behind the invitation, never an extra frame around it. */
+/* Warm, diffuse floor lighting. No decorative border is added around the art. */
 .ambience { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ambience::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 76%;
+  width: min(97vw,42rem);
+  height: 22svh;
+  transform: translate(-50%,-10%);
+  background: radial-gradient(ellipse at center,rgba(119,85,63,.15),rgba(173,126,103,.07) 45%,transparent 73%);
+  filter: blur(1.35rem);
+}
 .ambience::after {
   content: '';
   position: absolute;
   inset: 0;
-  opacity: .13;
+  opacity: .10;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.2' filter='url(%23n)'/%3E%3C/svg%3E");
   mix-blend-mode: multiply;
 }
@@ -45,98 +63,125 @@ button:focus-visible { outline: 2px solid #a77d4c; outline-offset: .22rem; }
 .ambience__engraving svg { display: block; width: 100%; height: auto; }
 .ambience__engraving--left { bottom: -9%; left: -6%; transform: rotate(-8deg); }
 .ambience__engraving--right { top: -9%; right: -7%; transform: rotate(172deg); animation-delay: .45s; }
-.ambience__petals { position: absolute; inset: 0; }
+
+/* Petals use transform/opacity, land and stay instead of repeatedly raining down. */
+.petal-layer { position: absolute; inset: 0; pointer-events: none; }
+.petal-layer--ground, .petal-layer--breeze { z-index: 1; }
+.petal-layer--surface { z-index: 2; }
 .petal {
   position: absolute;
-  z-index: 1;
-  left: var(--x);
-  top: -8%;
   display: block;
   width: var(--size);
-  height: calc(var(--size) * .67);
+  height: calc(var(--size) * .7);
   border-radius: 87% 7% 80% 10%;
-  background: linear-gradient(132deg,rgba(247,205,202,.75),rgba(206,143,142,.7) 55%,rgba(254,231,207,.65));
-  box-shadow: inset .07rem .06rem .12rem rgba(255,255,255,.6), .1rem .17rem .3rem rgba(140,92,89,.08);
-  opacity: 0;
+  background: linear-gradient(132deg,rgba(247,208,207,.84),rgba(197,131,136,.72) 55%,rgba(254,233,212,.9));
+  box-shadow: inset .06rem .05rem .1rem rgba(255,255,255,.65), .11rem .14rem .16rem rgba(103,68,60,.13);
   transform-origin: 48% 62%;
-  animation: petal-fall var(--duration) var(--delay) linear infinite;
+  opacity: 0;
 }
-.petal:nth-child(3n) { background: linear-gradient(120deg,#f5dfd5,#cb9c93 60%,#f9e9d2); }
-.petal:nth-child(4n) { width: calc(var(--size) * .66); }
-.twinkle { position: absolute; z-index: 1; left: var(--x); top: var(--y); width: .55rem; aspect-ratio: 1; opacity: 0; animation: star-pulse 4.5s var(--delay) ease-in-out infinite; }
-.twinkle::before, .twinkle::after { content: ''; position: absolute; background: #b89053; box-shadow: 0 0 .5rem #fff6df; }
+.petal:nth-child(3n) { background: linear-gradient(125deg,#f7e6db,#ceada1 63%,#fff0dc); }
+.petal--land { left: var(--x); top: var(--y); animation: petal-land var(--duration) var(--delay) cubic-bezier(.25,.55,.3,1) both; }
+.petal--breeze { left: 104%; top: var(--y); animation: petal-breeze var(--duration) var(--delay) linear infinite; }
+.twinkle { position: absolute; z-index: 1; left: var(--x); top: var(--y); width: .52rem; aspect-ratio: 1; opacity: 0; animation: star-pulse 4.5s var(--delay) ease-in-out infinite; }
+.twinkle::before, .twinkle::after { content: ''; position: absolute; background: #b89053; box-shadow: 0 0 .4rem #fff6df; }
 .twinkle::before { left: 46%; top: 0; height: 100%; width: 8%; }
 .twinkle::after { top: 46%; left: 0; width: 100%; height: 8%; }
 
-/* Mobile: the artwork stretches to the usable viewport, with a small rim of background.
-   All opening frames occupy the exact same viewport-aligned stage. */
 .screen {
   position: absolute;
   inset: 0;
   z-index: 1;
   display: grid;
   place-items: center;
-  padding:
-    max(clamp(.6rem,2.1svh,1rem),env(safe-area-inset-top))
-    clamp(.55rem,2.2vw,1rem)
-    max(clamp(.6rem,2.1svh,1rem),env(safe-area-inset-bottom));
+  padding: max(1rem,env(safe-area-inset-top)) .5rem max(1rem,env(safe-area-inset-bottom));
   pointer-events: none;
 }
 .screen--cover { z-index: 2; visibility: hidden; }
 .phase-cover-arrive .screen--cover,
 .phase-cover .screen--cover,
+.phase-button-drop .screen--cover,
 .phase-opening .screen--cover,
 .phase-opened .screen--cover { visibility: visible; }
 .phase-cover .screen--cover,
 .phase-opened .screen--cover { pointer-events: auto; }
 .phase-cover-arrive .screen--splash,
 .phase-cover .screen--splash,
+.phase-button-drop .screen--splash,
 .phase-opening .screen--splash,
 .phase-opened .screen--splash { visibility: hidden; }
 
 .stage { position: relative; display: grid; place-items: center; width: 100%; height: 100%; min-height: 0; }
+/* The button shares a physical floor line with the invitation, rather than
+   being pinned to an unrelated point on the phone viewport. */
+.stage--cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(.3rem, 1svh, .8rem);
+}
 .invitation-card {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: min(95vw,36rem,51svh);
+  aspect-ratio: 3 / 4.45;
+  height: auto;
   opacity: 0;
-  transform: scale(1);
+  transform: translate3d(0,0,0) scale(1);
+  transform-origin: center 75%;
   will-change: opacity, transform;
+  pointer-events: none;
+}
+/* Splash has considerably more visible ground around it. */
+.invitation-card--splash { width: min(84vw,31rem,46svh); aspect-ratio: 3 / 4.2; }
+/* Soft contact shadow follows the card's natural edge, not a rectangular frame. */
+.invitation-card::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 6%;
+  right: 6%;
+  bottom: -.55rem;
+  height: 1.2rem;
+  background: rgba(94,64,49,.23);
+  border-radius: 50%;
+  filter: blur(.8rem);
+  transform: scaleX(.92);
   pointer-events: none;
 }
 .invitation-card__image {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: fill; /* Intentional: full-height phone artwork with small surrounding gaps. */
-  filter: drop-shadow(0 .8rem 1rem rgba(77,47,33,.24)) drop-shadow(0 .16rem .18rem rgba(88,60,47,.14));
+  object-fit: fill; /* Width first, restrained 3:4.2 / 3:4.45 portrait ratio. */
+  filter: drop-shadow(0 .6rem .72rem rgba(77,47,33,.2)) drop-shadow(0 .12rem .16rem rgba(88,60,47,.12));
+  pointer-events: none;
+  -webkit-user-select: none;
   user-select: none;
-  -webkit-user-drag: none;
   -webkit-touch-callout: none;
+  -webkit-user-drag: none;
 }
 
-/* The splash fades IN and OUT at its final size: no tilt, slide, bounce or zoom. */
+/* Splash is already at its final size: opacity only. */
 .phase-splash.is-ready .invitation-card--splash { animation: splash-fade-in 1.15s ease-out both; }
 .phase-splash-exit .invitation-card--splash { animation: splash-fade-out .95s ease-in-out both; }
 
-/* Loader is overlaid below the lettering printed in the uploaded splash art. */
 .splash-loader {
   position: absolute;
   z-index: 3;
-  top: 85.7%;
+  top: 85.4%;
   left: 50%;
-  width: 28%;
+  width: 41%;
   transform: translateX(-50%);
   opacity: 0;
 }
 .phase-splash.is-ready .splash-loader { animation: loader-appear .45s .82s both; }
 .phase-splash-exit .splash-loader { animation: loader-disappear .5s ease both; }
 .splash-loader__line {
-  height: clamp(.13rem,.42vw,.23rem);
+  height: clamp(.28rem,1vw,.4rem);
   overflow: hidden;
   border-radius: 99rem;
-  background: rgba(122,87,57,.23);
-  box-shadow: 0 1px 1px rgba(255,255,255,.7);
+  background: rgba(122,87,57,.24);
+  box-shadow: inset 0 .04rem .1rem rgba(105,76,56,.17),0 1px 1px rgba(255,255,255,.75);
 }
 .splash-loader__line span {
   display: block;
@@ -148,49 +193,106 @@ button:focus-visible { outline: 2px solid #a77d4c; outline-offset: .22rem; }
 }
 .phase-splash.is-ready .splash-loader__line span { animation: loader-fill 2.65s .84s ease-in-out both; }
 .phase-splash-exit .splash-loader__line span { width: 100%; }
-.splash-loader__gem { position: absolute; top: .5rem; left: 50%; transform: translateX(-50%); color: #987047; font-size: .8rem; animation: star-pulse 1.5s ease-in-out infinite; }
+.splash-loader__petal {
+  position: absolute;
+  left: 0;
+  bottom: .36rem;
+  width: .84rem;
+  height: .58rem;
+  border-radius: 85% 0 85% 12%;
+  background: linear-gradient(130deg,#f6e0d7,#c7898f);
+  box-shadow: 0 .08rem .18rem rgba(105,67,58,.17);
+  transform: translateX(-50%) rotate(-25deg);
+}
+.phase-splash.is-ready .splash-loader__petal { animation: loader-petal 2.65s .84s ease-in-out both; }
+.phase-splash-exit .splash-loader__petal { left: 100%; transform: translateX(-100%) rotate(14deg); }
 
-/* The cover appears AFTER the splash is gone: small -> full scale and transparent -> opaque. */
-.phase-cover-arrive .invitation-card--cover { animation: cover-approach 1.35s cubic-bezier(.17,.78,.23,1) both; }
+/* Large and high at first, then a soft contact and a tiny recoil. */
+.phase-cover-arrive .invitation-card--cover { animation: cover-fall 1.65s cubic-bezier(.22,.64,.29,1) both; }
 .phase-cover .invitation-card--cover,
+.phase-button-drop .invitation-card--cover,
 .phase-opening .invitation-card--cover,
-.phase-opened .invitation-card--cover { opacity: 1; transform: scale(1); }
+.phase-opened .invitation-card--cover { opacity: 1; transform: translate3d(0,0,0) scale(1); }
 .phase-cover .invitation-card--cover { pointer-events: auto; }
 
-/* Open Card stays invisible during the zoom, THEN slides upward and fades in. */
-.open-card-button {
+/* The opening photographs were captured at different distances/heights.
+   Maintain one 1200x1600 canvas; compensate with motion rather than trimming.
+   Full-screen frames intentionally extend outside the phone's clipped stage. */
+.phase-opening .invitation-card--cover,
+.phase-opened .invitation-card--cover {
+  transform-origin: center center;
+  transform: translate3d(0, var(--opening-lift), 0) scale(var(--opening-scale));
+  transition: transform .48s cubic-bezier(.28,.12,.23,1);
+}
+/* Frame 11 begins the descent while its artwork is still on screen. */
+.phase-opening .opening-pose--falling {
+  animation: opening-start-fall .66s cubic-bezier(.3,.12,.58,1) both;
+  transition: none;
+}
+/* Frame 12 completes the fall to the original grounded invitation size. */
+.phase-opening .opening-pose--landed,
+.phase-opened .opening-pose--landed {
+  animation: opening-ground-contact .92s cubic-bezier(.22,.64,.28,1) both;
+  transition: none;
+}
+
+/* Grounded button: laid immediately beneath the card, with a short contact
+   shadow and no looping float. Its wrapper holds space while it falls away. */
+.ground-controls {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 3.2rem;
+  flex: none;
+}
+.phase-opening .ground-controls::after,
+.phase-opened .ground-controls::after { opacity: 0; }
+.ground-controls::after {
+  content: '';
   position: absolute;
-  z-index: 4;
+  z-index: -1;
   left: 50%;
-  top: 50%;
+  bottom: .05rem;
+  width: min(11rem,48vw);
+  height: .48rem;
+  border-radius: 50%;
+  background: rgba(102,67,47,.19);
+  filter: blur(.4rem);
+  transform: translateX(-50%);
+}
+.open-card-button {
+  position: relative;
   display: inline-flex;
+  z-index: 1;
   justify-content: center;
   align-items: center;
   gap: clamp(.4rem,1.5vw,.65rem);
-  min-height: 3rem;
-  padding: .72rem clamp(1rem,4vw,1.6rem);
+  min-height: 3.05rem;
+  padding: .76rem clamp(1rem,4vw,1.6rem);
   border: 1px solid rgba(159,116,73,.74);
   border-radius: 99rem;
   color: #72513e;
   background: linear-gradient(145deg,rgba(255,253,246,.98),rgba(243,223,195,.98));
-  box-shadow: 0 .4rem 1.3rem rgba(96,56,41,.2), inset 0 1px 0 #fff, 0 0 0 .2rem rgba(250,239,223,.5);
-  font-size: clamp(.7rem,2.7vw,.89rem);
+  box-shadow: 0 .14rem .26rem rgba(96,56,41,.23),inset 0 1px 0 #fff,0 0 0 .11rem rgba(250,239,223,.4);
+  font-size: clamp(.7rem,2.7vw,.9rem);
   font-weight: bold;
   letter-spacing: .14em;
   text-transform: uppercase;
   white-space: nowrap;
   opacity: 0;
-  transform: translate(-50%,calc(-50% + 1.7rem));
+  transform: translate3d(0,1.7rem,0);
   cursor: pointer;
-  touch-action: manipulation;
+  will-change: transform,opacity;
 }
 .open-card-button__spark { color: #ad895b; font-size: 1.25rem; line-height: .5; }
 .open-card-button__arrow { font-size: 1rem; font-weight: normal; transition: transform .25s ease; }
-.phase-cover .open-card-button { animation: button-slide-up .8s cubic-bezier(.18,.85,.24,1) both; }
-.phase-opening .open-card-button { animation: button-disappear .28s ease-in both; pointer-events: none; }
-.open-card-button:hover { background: linear-gradient(145deg,#fffdf7,#efdbbc); }
-.open-card-button:hover .open-card-button__arrow { transform: translateX(.22rem); }
-.open-card-button:active { filter: brightness(.96); }
+.phase-cover .open-card-button { animation: button-rise .8s cubic-bezier(.18,.85,.24,1) both; }
+.phase-button-drop .open-card-button { animation: button-drop .65s cubic-bezier(.42,0,.92,.55) both; pointer-events: none; }
+.open-card-button:hover:not(:disabled) { background: linear-gradient(145deg,#fffdf7,#efdbbc); }
+.open-card-button:hover:not(:disabled) .open-card-button__arrow { transform: translateX(.22rem); }
 .open-card-button:disabled { cursor: default; }
 
 .replay-button {
@@ -215,41 +317,81 @@ button:focus-visible { outline: 2px solid #a77d4c; outline-offset: .22rem; }
 
 @keyframes glow-breathe { from {opacity:.35;transform:scale(.93);} to {opacity:.72;transform:scale(1.07);} }
 @keyframes engraving-reveal { from {opacity:0;filter:blur(.7rem);} to {opacity:.24;filter:blur(0);} }
-@keyframes petal-fall { 0% {transform:translate3d(0,-7vh,0) rotate(var(--turn)) rotateY(0);opacity:0;} 9% {opacity:.7;} 83% {opacity:.65;} 100% {transform:translate3d(var(--drift),114svh,0) rotate(540deg) rotateY(180deg);opacity:0;} }
+@keyframes petal-land {
+  0% {transform:translate3d(8vw,-112svh,0) rotate(-145deg) scale(.84);opacity:0;}
+  15% {opacity:.8;}
+  72% {transform:translate3d(-.7rem,-1.7rem,0) rotate(35deg) scale(1);opacity:.84;}
+  90% {transform:translate3d(.15rem,.12rem,0) rotate(var(--turn)) scale(.98);opacity:.84;}
+  100% {transform:translate3d(0,0,0) rotate(var(--turn)) scale(1);opacity:.85;}
+}
+@keyframes petal-breeze {
+  0% {transform:translate3d(5vw,-.3rem,0) rotate(var(--turn));opacity:0;}
+  8% {opacity:.67;}
+  48% {transform:translate3d(-56vw,.48rem,0) rotate(140deg);opacity:.72;}
+  90% {opacity:.67;}
+  100% {transform:translate3d(-123vw,-.25rem,0) rotate(285deg);opacity:0;}
+}
 @keyframes star-pulse { 0%,100% {transform:scale(.4) rotate(-20deg);opacity:.15;} 50% {transform:scale(1.25) rotate(20deg);opacity:.76;} }
 @keyframes splash-fade-in { from {opacity:0;} to {opacity:1;} }
 @keyframes splash-fade-out { from {opacity:1;} to {opacity:0;} }
 @keyframes loader-appear { from {opacity:0;transform:translate(-50%,.45rem);} to {opacity:1;transform:translate(-50%,0);} }
 @keyframes loader-disappear { from {opacity:1;} to {opacity:0;} }
 @keyframes loader-fill { 0% {width:0;} 63% {width:72%;} 90% {width:93%;} 100% {width:100%;} }
-@keyframes cover-approach {
-  0% {opacity:0;transform:scale(.38);filter:blur(.4rem);}
-  35% {opacity:.52;filter:blur(.1rem);}
-  100% {opacity:1;transform:scale(1);filter:blur(0);}
+@keyframes loader-petal {
+  0% {left:0;transform:translateX(-40%) rotate(-25deg);}
+  63% {left:72%;transform:translateX(-60%) rotate(19deg);}
+  90% {left:93%;transform:translateX(-80%) rotate(-10deg);}
+  100% {left:100%;transform:translateX(-100%) rotate(14deg);}
 }
-@keyframes button-slide-up {
-  from {opacity:0;transform:translate(-50%,calc(-50% + 1.7rem));filter:blur(.15rem);}
-  to {opacity:1;transform:translate(-50%,-50%);filter:blur(0);}
+@keyframes cover-fall {
+  0% {opacity:0;transform:translate3d(0,-23svh,0) scale(1.5);}
+  23% {opacity:.65;}
+  58% {opacity:1;transform:translate3d(0,.78rem,0) scale(.965);}
+  76% {transform:translate3d(0,-.38rem,0) scale(1.018);}
+  90% {transform:translate3d(0,.11rem,0) scale(.997);}
+  100% {opacity:1;transform:translate3d(0,0,0) scale(1);}
 }
-@keyframes button-disappear { from {opacity:1;transform:translate(-50%,-50%);} to {opacity:0;transform:translate(-50%,calc(-50% - .6rem));} }
+@keyframes opening-start-fall {
+  0%, 26% { transform: translate3d(0,-2svh,0) scale(var(--opening-full-scale)); }
+  100% { transform: translate3d(0,-1svh,0) scale(calc(var(--opening-full-scale) * .78)); }
+}
+@keyframes opening-ground-contact {
+  0% { transform: translate3d(0,-1svh,0) scale(calc(var(--opening-full-scale) * .78)); }
+  77% { transform: translate3d(0,.3rem,0) scale(.975); }
+  88% { transform: translate3d(0,-.15rem,0) scale(1.008); }
+  100% { transform: translate3d(0,0,0) scale(1); }
+}
+@keyframes button-rise {
+  from {opacity:0;transform:translate3d(0,1.7rem,0);}
+  to {opacity:1;transform:translate3d(0,0,0);}
+}
+@keyframes button-drop {
+  0% {opacity:1;transform:translate3d(0,0,0) rotate(0) scale(1);}
+  26% {opacity:1;transform:translate3d(0,-.3rem,0) rotate(-5deg) scale(1.04);}
+  100% {opacity:0;transform:translate3d(0,34svh,0) rotate(16deg) scale(.78);}
+}
 @keyframes replay-appear { from {opacity:0;transform:translateY(.6rem);} to {opacity:1;transform:translateY(0);} }
 
-/* Keep proportions more conventional on wide displays; phone layouts remain edge-filling. */
 @media (min-width: 680px) {
-  .stage { width: min(90vw,34rem); height: min(94dvh,48rem); }
-  .screen { padding: clamp(1rem,3svh,2rem); }
   .ambience__engraving--left { left: 7%; bottom: -8%; }
   .ambience__engraving--right { right: 7%; top: -8%; }
 }
 @media (max-height: 420px) and (orientation: landscape) {
-  .screen { padding: .4rem; }
-  .stage { width: min(62vw,24rem); height: 100%; }
+  .invitation-card { width: min(64vw,50svh); }
+  .invitation-card--splash { width: min(55vw,44svh); }
+  .stage--cover { gap: .25rem; }
+  .ground-controls { min-height: 2.6rem; }
+  .open-card-button { min-height: 2.3rem; padding: .35rem .85rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .phase-splash.is-ready .invitation-card--splash,
   .phase-cover-arrive .invitation-card--cover,
   .phase-cover .invitation-card--cover,
+  .phase-button-drop .invitation-card--cover,
   .phase-opened .invitation-card--cover { opacity: 1; }
-  .phase-cover .open-card-button { opacity: 1; transform: translate(-50%,-50%); }
+  .phase-cover .open-card-button { opacity: 1; transform: translate3d(0,0,0); }
+  .phase-opening .invitation-card--cover,
+  .phase-opened .invitation-card--cover { transform: translate3d(0,0,0) scale(1); }
+  .phase-button-drop .open-card-button { opacity: 0; }
 }

@@ -1,51 +1,39 @@
-# Wedding Invitation A & C — Phase 1 (opening sequence update)
+# Wedding Invitation A & C — Phase 1 (opening depth correction)
 
-Mobile-first React + Vite + TypeScript wedding invitation. Includes the splash, cover and the **actual 2.png–12.png opening animation**. It intentionally stops at the opened card; the invitation text and later sections are future phases.
+A mobile-first React + Vite + TypeScript wedding invitation. This patch preserves the existing splash, grounded background, petals, and 11 optimized WebP opening images. It changes the envelope motion and places **Open Card** immediately below the resting card, sharing its visual ground plane.
 
-## Start
+## Run on your phone
 
-```bash
+```powershell
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173 or Vite's LAN URL on a phone connected to the same Wi-Fi.
+Open the Vite network/LAN URL on your phone (same Wi-Fi). To check a production build:
 
-To verify:
-
-```bash
+```powershell
 npm run typecheck
 npm run build
 ```
 
-## Animation timeline
+## Animation sequence
 
-1. Splash artwork uses its **full final size** and fades in (1.15 s), without tilt, movement or resizing. A small golden loader fills below the printed “Wedding Invitation” caption.
-2. Splash remains on screen for 3.55 s from image load, then fades out over 0.95 s.
-3. Only after the splash has disappeared does the envelope enter from **38% scale to 100% scale**, while fading in over 1.35 s.
-4. **Open Card** button rises and fades into view over 0.8 s, starting only after the cover finishes approaching.
-5. Tapping **Open Card** runs the uploaded photo sequence `2.png` through `12.png`. The last frame remains visible; there is no fake flap rotation or placeholder page.
-6. A small Replay control on the last frame restarts the experience.
+1. **Splash:** fades in at rest, with a thick loading line and a travelling petal; fades away.
+2. **Cover:** oversized above the screen, falls inward and gently settles.
+3. **Open Card:** slides up and fades in directly **beneath the cover**, resting near its lower edge instead of floating at a fixed viewport position. On tap it drops downward.
+4. **Frame 02 / 03:** closed envelope at the original grounded size and depth.
+5. **Frame 04:** begins rising (slightly enlarged to compensate for the camera having zoomed out).
+6. **Frame 05:** continues rising, scaling up and moving slightly upward.
+7. **Frames 06–10:** fully raised; the card is larger than the phone viewport and intentionally clipped at the edges, as if it has moved close to the viewer.
+8. **Frame 11:** starts at the raised size, then begins the descent while the photo is still displayed.
+9. **Frame 12:** drops back to the original resting size with a soft landing; remains visible until the next phase.
 
-## Responsive layout
+The raised scale is calculated from the actual card height and viewport height, so tall phone screens also get a full-bleed raised look. The WebP assets retain their original aligned **1200 × 1600** transparent canvases and are **not** cropped or replaced. The motion is expressed using responsive CSS transforms. Timings and per-frame scale choices are in `src/App.tsx`; animation details are in `src/styles.css`.
 
-- Card stretches to the phone's usable screen **width and height**, leaving a small background rim (CSS `object-fit: fill`). Unlike the previous version, it does **not** preserve a fixed 3:4 shape on tall phones.
-- The card itself has **no border, backing panel or frame**. `filter: drop-shadow(...)` follows the image transparency for realistic depth.
-- Background, falling petals and sparkle details are separate CSS layers.
-- Desktop keeps the invitation in a portrait-shaped central stage rather than stretching it across an ultrawide viewport.
+## Interactions and accessibility
 
-## Images
+Mobile tap highlight, usual touch-callout, dragging and selection are suppressed where supported. Keyboard focus remains visible. `prefers-reduced-motion` shortens motion and leaves the final frame grounded. These settings do not prevent screenshots or a visitor accessing public image files.
 
-Existing asset: `public/images/splash.webp` (unchanged).
+## Delta patch application
 
-Added frames: `public/images/opening/frame-02.webp` through `frame-12.webp`, converted directly from your numbered PNGs. **All eleven retain their original transparent 1200×1600 canvas** so the envelope components stay aligned while opening; never trim or crop them frame by frame. `frame-02.webp` is also the closed-cover artwork, avoiding a jump at the first animation frame. The older `public/images/cover.webp` is left untouched for compatibility but is no longer referenced in the current UI.
-
-## Timing settings
-
-- `SPLASH_VISIBLE_MS`, `SPLASH_EXIT_MS`, `COVER_APPROACH_MS`, and `OPENING_FRAME_MS`: `src/App.tsx`.
-- Splash/cover/button keyframes and responsive sizing: `src/styles.css`.
-- Reduced-motion preferences are respected by disabling visual animation effects.
-
-## Applying a delta-only patch
-
-The update ZIP contains **only added or modified files** relative to the previous `wedding-invitation-A_C-animated-phase1.zip` build. Extract its contents directly over the root of your existing repo; do not put them inside an additional `wedding-invitation-A_C` folder. All other files remain unchanged. No deletions are required.
+This ZIP is a **delta-only overlay** on top of `wedding-invitation-A_C-phase1-grounded-motion-patch.zip` (with the earlier opening frames installed). Extract its contents into the existing repository root, preserving relative paths. It replaces only `src/App.tsx`, `src/styles.css`, and `README.md`; no image changes and no deletions.

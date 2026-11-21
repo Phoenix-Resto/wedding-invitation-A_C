@@ -1,33 +1,83 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
-type Phase = 'splash' | 'splash-exit' | 'cover-arrive' | 'cover' | 'opening' | 'opened';
+type Phase = 'splash' | 'splash-exit' | 'cover-arrive' | 'cover' | 'button-drop' | 'opening' | 'opened';
 
 // Deliberately sequential: the splash must finish fading OUT before the cover enters.
 const SPLASH_VISIBLE_MS = 3550;
 const SPLASH_EXIT_MS = 950;
-const COVER_APPROACH_MS = 1350;
+const COVER_DROP_MS = 1650;
+const BUTTON_DROP_MS = 650;
 
 // Every frame has the same 1200×1600 transparent canvas. Do not crop them independently.
 const OPENING_FRAMES = Array.from(
   { length: 11 },
   (_, index) => `/images/opening/frame-${String(index + 2).padStart(2, '0')}.webp`,
 );
-const OPENING_FRAME_MS = [220, 280, 250, 260, 260, 245, 260, 275, 295, 330] as const;
+// Each dwell leaves enough time for its corresponding size/position transition.
+// Frame 11 has a longer hold to begin the descent before frame 12 settles.
+const OPENING_FRAME_MS = [250, 290, 460, 540, 410, 300, 310, 310, 340, 680] as const;
 
-const petals = [
-  ['5%', '-1.5s', '11s', '1.2rem', '8vw', '28deg'],
-  ['17%', '-7.4s', '17s', '.8rem', '-11vw', '-10deg'],
-  ['29%', '-3.8s', '15s', '1rem', '13vw', '48deg'],
-  ['42%', '-10s', '16s', '.65rem', '-9vw', '15deg'],
-  ['55%', '-5.7s', '14s', '1rem', '14vw', '63deg'],
-  ['68%', '-2.8s', '13s', '.7rem', '-14vw', '19deg'],
-  ['83%', '-11s', '19s', '1.2rem', '-8vw', '52deg'],
-  ['94%', '-6s', '16s', '.9rem', '-12vw', '12deg'],
-  ['10%', '-13s', '20s', '.7rem', '10vw', '27deg'],
-  ['76%', '-9s', '18s', '.68rem', '-17vw', '36deg'],
-  ['36%', '-14s', '20s', '.85rem', '15vw', '67deg'],
-  ['87%', '-3s', '21s', '.8rem', '-18vw', '35deg'],
+// Frame 2 and 3 stay at the resting depth; camera correction and the rise begin
+// at frame 4, reach full-screen at 6, and remain there through 10.
+// Frame 11 starts falling and frame 12 reaches the original ground level.
+function openingPosition(index: number, fullScale: number) {
+  if (index < 2) return { scale: 1, lift: '0svh', stage: 'rest' };
+  if (index === 2) return { scale: 1.17, lift: '-2svh', stage: 'rising' };
+  if (index === 3) return { scale: 1 + (fullScale - 1) * .52, lift: '-2svh', stage: 'rising' };
+  if (index < 9) return { scale: fullScale, lift: '-1svh', stage: 'raised' };
+  return { scale: fullScale, lift: '-3svh', stage: index === 9 ? 'falling' : 'landed' };
+}
+
+// x, resting height, delay, fall duration, size and rotation. Negative delays
+// leave some petals already resting when the invitation first appears.
+const groundPetals = [
+  ['4%', '87%', '-4.2s', '3.1s', '1.1rem', '-22deg'],
+  ['13%', '78%', '.2s', '2.8s', '.8rem', '48deg'],
+  ['24%', '91%', '-3.7s', '3s', '.9rem', '72deg'],
+  ['38%', '84%', '.8s', '3.2s', '.75rem', '-15deg'],
+  ['59%', '92%', '-4s', '2.9s', '1rem', '26deg'],
+  ['76%', '84%', '1.6s', '3s', '.72rem', '-37deg'],
+  ['90%', '88%', '-3.5s', '2.7s', '1.05rem', '58deg'],
+  ['96%', '74%', '2.2s', '3.4s', '.85rem', '-45deg'],
+  ['8%', '67%', '1.2s', '3.2s', '.65rem', '24deg'],
+  ['88%', '66%', '-3.7s', '3s', '.72rem', '-18deg'],
 ] as const;
+
+// These petals settle over the image, while the group above stays underneath it.
+const surfacePetals = [
+  ['8%', '78%', '-4.3s', '3.2s', '.63rem', '45deg'],
+  ['85%', '88%', '1.4s', '3.1s', '.7rem', '-30deg'],
+  ['69%', '72%', '2.1s', '3.5s', '.57rem', '72deg'],
+] as const;
+
+// A few loose petals move across the floor in a gentle right-to-left breeze.
+const breezePetals = [
+  ['89%', '12s', '-3s', '.82rem', '-18deg'],
+  ['77%', '15s', '-11s', '.62rem', '34deg'],
+  ['94%', '17s', '-7s', '1rem', '15deg'],
+] as const;
+
+function LandingPetals({ onCard = false }: { onCard?: boolean }) {
+  const collection = onCard ? surfacePetals : groundPetals;
+  return (
+    <div className={onCard ? 'petal-layer petal-layer--surface' : 'petal-layer petal-layer--ground'} aria-hidden="true">
+      {collection.map(([x, y, delay, duration, size, turn], index) => (
+        <i
+          key={index}
+          className="petal petal--land"
+          style={{
+            '--x': x,
+            '--y': y,
+            '--delay': delay,
+            '--duration': duration,
+            '--size': size,
+            '--turn': turn,
+          } as CSSProperties}
+        />
+      ))}
+    </div>
+  );
+}
 
 const stars = [
   ['11%', '19%', '0s'],
@@ -55,17 +105,17 @@ function AmbientDecorations() {
           <path d="M16 302C47 289 59 306 35 330C14 329 5 313 16 302ZM95 300C118 279 140 280 150 300C136 320 115 319 95 300ZM24 212C42 187 60 192 68 219C57 241 37 231 24 212ZM148 193C162 171 182 165 196 183C190 209 170 211 148 193ZM97 74C91 50 106 39 125 51C136 73 118 88 97 74ZM179 56C181 33 202 29 217 46C214 65 195 75 179 56Z" />
         </svg>
       </div>
-      <div className="ambience__petals">
-        {petals.map(([x, delay, duration, size, drift, turn], index) => (
+      <LandingPetals />
+      <div className="petal-layer petal-layer--breeze">
+        {breezePetals.map(([y, duration, delay, size, turn], index) => (
           <i
             key={index}
-            className="petal"
+            className="petal petal--breeze"
             style={{
-              '--x': x,
-              '--delay': delay,
+              '--y': y,
               '--duration': duration,
+              '--delay': delay,
               '--size': size,
-              '--drift': drift,
               '--turn': turn,
             } as CSSProperties}
           />
@@ -88,6 +138,34 @@ export default function App() {
   const [coverLoaded, setCoverLoaded] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
   const [replayCount, setReplayCount] = useState(0);
+  const [fullScale, setFullScale] = useState(1.2);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const appRef = useRef<HTMLElement>(null);
+
+  // Make the raised frames truly extend beyond the phone viewport, even on
+  // unusually tall phones. offsetHeight ignores CSS transforms/animations.
+  useEffect(() => {
+    const card = cardRef.current;
+    const app = appRef.current;
+    if (!card || !app) return;
+    const recalculate = () => {
+      const cardHeight = card.offsetHeight;
+      if (!cardHeight) return;
+      const next = Math.min(1.45, Math.max(1.05, (app.clientHeight * 0.80) / cardHeight));
+      setFullScale((previous) => Math.abs(previous - next) < .01 ? previous : next);
+    };
+    recalculate();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recalculate) : undefined;
+    observer?.observe(app);
+    observer?.observe(card);
+    window.addEventListener('resize', recalculate);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', recalculate);
+    };
+  }, []);
+
+  const openingPose = openingPosition(frameIndex, fullScale);
 
   useEffect(() => {
     if (phase !== 'splash' || !splashLoaded) return;
@@ -103,7 +181,14 @@ export default function App() {
 
   useEffect(() => {
     if (phase !== 'cover-arrive') return;
-    const timeout = window.setTimeout(() => setPhase('cover'), COVER_APPROACH_MS);
+    const timeout = window.setTimeout(() => setPhase('cover'), COVER_DROP_MS);
+    return () => window.clearTimeout(timeout);
+  }, [phase]);
+
+  // The button falls off the screen before the physical envelope begins opening.
+  useEffect(() => {
+    if (phase !== 'button-drop') return;
+    const timeout = window.setTimeout(() => setPhase('opening'), BUTTON_DROP_MS);
     return () => window.clearTimeout(timeout);
   }, [phase]);
 
@@ -145,11 +230,16 @@ export default function App() {
   const startOpening = () => {
     if (phase !== 'cover') return;
     setFrameIndex(0);
-    setPhase('opening');
+    setPhase('button-drop');
   };
 
   return (
-    <main className={`invitation-app phase-${phase}${splashLoaded ? ' is-ready' : ''}`}>
+    <main
+      ref={appRef}
+      className={`invitation-app phase-${phase}${splashLoaded ? ' is-ready' : ''}`}
+      onContextMenu={(event) => event.preventDefault()}
+      onDragStart={(event) => event.preventDefault()}
+    >
       <AmbientDecorations />
 
       <section
@@ -169,9 +259,10 @@ export default function App() {
               fetchPriority="high"
               draggable={false}
             />
+            <LandingPetals onCard />
             <div className="splash-loader" role="status" aria-label="Preparing your invitation">
               <div className="splash-loader__line"><span /></div>
-              <span className="splash-loader__gem" aria-hidden="true">✧</span>
+              <span className="splash-loader__petal" aria-hidden="true" />
             </div>
           </div>
         </div>
@@ -183,8 +274,16 @@ export default function App() {
         aria-hidden={phase === 'splash' || phase === 'splash-exit'}
         inert={phase !== 'cover' && phase !== 'opened'}
       >
-        <div className="stage">
-          <div className="invitation-card invitation-card--cover">
+        <div className="stage stage--cover">
+          <div
+            ref={cardRef}
+            className={`invitation-card invitation-card--cover opening-pose--${openingPose.stage}`}
+            style={{
+              '--opening-scale': openingPose.scale,
+              '--opening-lift': openingPose.lift,
+              '--opening-full-scale': fullScale,
+            } as CSSProperties}
+          >
             <img
               className="invitation-card__image"
               src={OPENING_FRAMES[frameIndex]}
@@ -195,6 +294,9 @@ export default function App() {
               onError={() => setCoverLoaded(true)}
               draggable={false}
             />
+            <LandingPetals onCard />
+          </div>
+          <div className="ground-controls">
             <button
               type="button"
               className="open-card-button"
