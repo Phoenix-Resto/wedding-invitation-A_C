@@ -225,8 +225,9 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: true });
-    if (!ctx) return;
+    const context = canvas.getContext('2d', { alpha: true });
+    if (!context) return;
+    const ctx: CanvasRenderingContext2D = context;
     const sprites = createPetalSprites();
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let reduced = motionQuery.matches;
