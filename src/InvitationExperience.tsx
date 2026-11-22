@@ -52,6 +52,10 @@ function WordLine({ text, order, className = '' }: { text: string; order: number
   );
 }
 
+function TitleUnderline({ order }: { order: number }) {
+  return <InvitationImage className="inv-title-underline" src="/images/title-divider.svg" alt="" order={order} />;
+}
+
 function PilupuScene({ introComplete }: { introComplete: boolean }) {
   return <div className={`inv-scene inv-scene--pilupu ${introComplete ? 'inv-pilupu--ready' : ''}`} lang="te">
     <InvitationImage className="inv-intro__deity inv-intro__deity--left" src="/images/pilupu/god-left.webp" alt="శ్రీ గణేశుడు" order={0} />
@@ -91,7 +95,7 @@ function PersonScene({ person, language }: { person: 'groom' | 'bride'; language
       ];
   return <div className={`inv-scene inv-scene--person inv-scene--${person}`} lang={language}>
     <div className="inv-person__layout">
-      <div className="inv-person__header"><WordLine text={header} order={0} /></div>
+      <div className="inv-person__header"><WordLine text={header} order={0} /><TitleUnderline order={0.35} /></div>
       <div className="inv-person__copy">
         {lines.map((line, index) => (
           <div key={`${index}-${line.text}`} className={`inv-person__line inv-person__line--${line.kind}`}>
@@ -107,7 +111,7 @@ function PersonScene({ person, language }: { person: 'groom' | 'bride'; language
 function VivahamuScene({ language }: { language: Language }) {
   return <div className="inv-scene inv-scene--vivahamu" lang={language}>
     <div className="inv-ceremony__layout">
-      <div className="inv-ceremony__heading"><WordLine text={language === 'te' ? 'వివాహ మహోత్సవము' : 'Our Wedding'} order={0} /></div>
+      <div className="inv-ceremony__heading"><WordLine text={language === 'te' ? 'వివాహ మహోత్సవము' : 'Our Wedding'} order={0} /><TitleUnderline order={0.4} /></div>
       <MotionBlock className="inv-ceremony__portrait" order={1.15}><PhotoFrame person="couple" /></MotionBlock>
       <div className="inv-ceremony__date">
         <div className="inv-ceremony__month"><WordLine text={language === 'te' ? 'డిసెంబర్' : 'December'} order={3.65} /></div>
@@ -134,7 +138,7 @@ function CurtainDrawing() {
 function VenueScene({ language }: { language: Language }) {
   return <div className="inv-scene inv-scene--venue" lang={language}>
     <div className="inv-venue__layout">
-      <div className="inv-venue__heading"><WordLine text={language === 'te' ? 'కళ్యాణ వేదిక' : 'Wedding Venue'} order={0} /></div>
+      <div className="inv-venue__heading"><WordLine text={language === 'te' ? 'కళ్యాణ వేదిక' : 'Wedding Venue'} order={0} /><TitleUnderline order={0.45} /></div>
       <div className="inv-venue__curtains">
         <MotionBlock className="inv-venue__curtain-layer" order={1.25}><CurtainDrawing /></MotionBlock>
         <div className="inv-venue__address">
@@ -142,7 +146,7 @@ function VenueScene({ language }: { language: Language }) {
           <div className="inv-venue__address-sub"><WordLine text={language === 'te' ? 'బుర్రిపాలెం రోడ్, తెనాలి' : 'Burripalem Road, Tenali'} order={4} /></div>
         </div>
       </div>
-      <div className="inv-venue__dinner-heading"><WordLine text={language === 'te' ? 'విందు భోజనము' : 'Dinner'} order={5.6} /></div>
+      <div className="inv-venue__dinner-heading"><WordLine text={language === 'te' ? 'విందు భోజనము' : 'Dinner'} order={5.6} /><TitleUnderline order={5.85} /></div>
       <div className="inv-venue__dinner-time"><WordLine text={language === 'te' ? 'రాత్రి 8:00 గంటల నుండి' : '8:00 PM onwards'} order={6.7} /></div>
     </div>
   </div>;
@@ -160,11 +164,15 @@ function FinalScene() {
 }
 
 type Petal = {
-  x: number; y: number; startY: number; endY: number;
-  vx: number; spin: number; angle: number; size: number; depth: number;
-  age: number; fallTime: number; falling: boolean; sway: number; alpha: number;
+  x: number; y: number; originX: number; originY: number;
+  vx: number; vy: number; burstVX: number; burstVY: number;
+  angle: number; spin: number; size: number; age: number;
+  approachTime: number; startDelay: number; sway: number; alpha: number;
 };
 
+// The paper and the invitation are stationary; these petals move in apparent
+// DEPTH (small/blurred -> large/sharp) at varied points around the entire screen.
+// After approaching, every petal drifts on its own until it exits the viewport.
 function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy: RefObject<number> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const petalsRef = useRef<Petal[]>([]);
@@ -205,45 +213,47 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
       const petals = petalsRef.current;
       for (let i = petals.length - 1; i >= 0; i -= 1) {
         const p = petals[i];
-        if (p.age < 0) { p.age += dt; continue; }
-        if (!reduced) {
-          p.age += dt;
-          if (p.falling) {
-            const progress = clamp01(p.age / p.fallTime);
-            p.y = p.startY + (p.endY - p.startY) * (1 - Math.pow(1 - progress, 2.2));
-            p.x += p.vx * dt * 0.7 + Math.sin(p.age * 3 + p.sway) * dt * 8;
-            if (progress >= 1) p.falling = false;
-          } else {
-            p.x += p.vx * dt * (1 + boost * 1.35);
-            p.y += Math.sin(p.age * 1.3 + p.sway) * dt * 1.9;
-          }
-          p.angle += p.spin * dt * (1 + boost * 0.3);
-        } else if (p.falling) {
-          p.y = p.endY;
-          p.falling = false;
+        p.age += dt;
+        if (p.age < p.startDelay) continue;
+        const elapsed = p.age - p.startDelay;
+        const approaching = clamp01(elapsed / p.approachTime);
+        const depth = reduced ? 1 : smooth(approaching);
+        const scale = reduced ? 1 : .12 + 1.05 * depth;
+        // The approach expands slightly outward from each random starting point.
+        // This creates depth, not the old top-to-bottom rain effect.
+        if (approaching < 1) {
+          p.x = p.originX + p.burstVX * depth + Math.sin(elapsed * 2.7 + p.sway) * 3 * depth;
+          p.y = p.originY + p.burstVY * depth + Math.cos(elapsed * 2.4 + p.sway) * 4 * depth;
+        } else if (!reduced) {
+          const speed = 1 + boost * 1.45;
+          p.x += p.vx * dt * speed;
+          p.y += (p.vy + Math.sin(elapsed * 1.7 + p.sway) * 5) * dt * speed;
         }
-        if (p.x < -width * 0.2 || p.x > width * 1.2 || p.y > height * 1.25) {
+        if (!reduced) p.angle += p.spin * dt * (1 + boost * .27);
+        const drawnSize = p.size * scale;
+        // Never discard an in-view petal, even when another section triggers.
+        if (p.x < -drawnSize * 2 || p.x > width + drawnSize * 2 ||
+            p.y < -drawnSize * 2 || p.y > height + drawnSize * 2) {
           petals.splice(i, 1);
           continue;
         }
-        const fallFraction = clamp01(p.age / p.fallTime);
-        const apparentSize = p.size * (0.55 + fallFraction * 0.45) * p.depth;
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.angle);
-        ctx.globalAlpha = p.alpha * Math.min(1, p.age * 3);
+        ctx.globalAlpha = p.alpha * (reduced ? 1 : Math.min(1, .16 + depth));
+        ctx.filter = reduced ? 'none' : `blur(${((1 - depth) * 1.8).toFixed(2)}px)`;
         ctx.shadowColor = 'rgba(109, 60, 57, .16)';
-        ctx.shadowBlur = apparentSize * 0.4;
-        ctx.shadowOffsetY = apparentSize * 0.17;
-        const gradient = ctx.createLinearGradient(-apparentSize, -apparentSize, apparentSize, apparentSize);
+        ctx.shadowBlur = drawnSize * .22;
+        ctx.shadowOffsetY = drawnSize * .1;
+        const gradient = ctx.createLinearGradient(-drawnSize, -drawnSize, drawnSize, drawnSize);
         gradient.addColorStop(0, '#fff3e8');
-        gradient.addColorStop(0.55, '#edb8b6');
+        gradient.addColorStop(.55, '#edb8b6');
         gradient.addColorStop(1, '#b87f85');
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.moveTo(-apparentSize * 0.48, apparentSize * 0.15);
-        ctx.quadraticCurveTo(-apparentSize * 0.6, -apparentSize * 0.75, apparentSize * 0.56, -apparentSize * 0.36);
-        ctx.quadraticCurveTo(apparentSize * 0.55, apparentSize * 0.28, -apparentSize * 0.48, apparentSize * 0.15);
+        ctx.moveTo(-drawnSize * .48, drawnSize * .15);
+        ctx.quadraticCurveTo(-drawnSize * .6, -drawnSize * .75, drawnSize * .56, -drawnSize * .36);
+        ctx.quadraticCurveTo(drawnSize * .55, drawnSize * .28, -drawnSize * .48, drawnSize * .15);
         ctx.fill();
         ctx.restore();
       }
@@ -260,32 +270,34 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
   useEffect(() => {
     if (!burst) return;
     const { width, height } = dimensions.current;
-    const count = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 7 : 17;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const count = reduced ? 7 : 19;
     const batch: Petal[] = Array.from({ length: count }, (_, i) => {
-      const direction = Math.random() < 0.5 ? -1 : 1;
+      const angle = Math.random() * Math.PI * 2;
+      const direction = Math.random() < .5 ? -1 : 1;
+      const startX = width * (.07 + Math.random() * .86);
+      const startY = height * (.09 + Math.random() * .80);
+      const burstDistance = 11 + Math.random() * 55;
       return {
-        x: width * (Math.random() * 1.12 - 0.06),
-        y: -height * (0.04 + Math.random() * 0.35),
-        startY: -height * (0.04 + Math.random() * 0.35),
-        endY: height * (0.56 + Math.random() * 0.40),
-        vx: direction * (6 + Math.random() * 20),
-        spin: direction * (0.45 + Math.random() * 1.0),
+        x: startX, y: startY, originX: startX, originY: startY,
+        burstVX: Math.cos(angle) * burstDistance,
+        burstVY: Math.sin(angle) * burstDistance,
+        vx: direction * (9 + Math.random() * 22),
+        vy: -8 + Math.random() * 16,
+        spin: direction * (.3 + Math.random() * 1.15),
         angle: Math.random() * Math.PI * 2,
-        size: Math.max(8, Math.min(width / 27, 17)) * (0.65 + Math.random() * 0.8),
-        depth: 0.7 + Math.random() * 0.55,
-        age: -Math.random() * 0.48 - i * 0.025,
-        fallTime: 1.5 + Math.random() * 1.3,
-        falling: true,
-        sway: Math.random() * 6.28,
-        alpha: 0.5 + Math.random() * 0.36,
+        size: Math.max(9, Math.min(width / 21, 20)) * (.7 + Math.random() * .75),
+        age: 0,
+        approachTime: 1.05 + Math.random() * 1.2,
+        startDelay: i * .035 + Math.random() * .32,
+        sway: Math.random() * Math.PI * 2,
+        alpha: .55 + Math.random() * .36,
       };
     });
     petalsRef.current.push(...batch);
   }, [burst]);
-
   return <canvas ref={canvasRef} className="inv-petals-canvas" aria-hidden="true" />;
 }
-
 
 // Offset measurements are made with the transforms removed. This gives every
 // word and photo its real destination position, including after language swaps
@@ -346,7 +358,13 @@ function applyPhotoReveal(photo: HTMLElement | null, local: number) {
   photo.style.setProperty('--photo-bloom', `${amount}`);
 }
 
-export default function InvitationExperience({ onReplay }: { onReplay: () => void }) {
+export default function InvitationExperience({ onReplay, skipIntro = false, musicEnabled, onToggleMusic, onVideoOpen }: {
+  onReplay: () => void;
+  skipIntro?: boolean;
+  musicEnabled: boolean;
+  onToggleMusic: () => void;
+  onVideoOpen: () => void;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const holderRefs = useRef<HTMLElement[]>([]);
   const metrics = useRef<MotionScene[]>([]);
@@ -358,7 +376,8 @@ export default function InvitationExperience({ onReplay }: { onReplay: () => voi
   const scrollEnergy = useRef(0);
   const hintTimer = useRef<number | undefined>(undefined);
   const finalTimer = useRef<number | undefined>(undefined);
-  const [introComplete, setIntroComplete] = useState(false);
+  const [introComplete, setIntroComplete] = useState(skipIntro);
+  const introBurstStarted = useRef(false);
   const [language, setLanguage] = useState<Language>('te');
   const [burst, setBurst] = useState(0);
   const [activeScene, setActiveScene] = useState(0);
@@ -484,13 +503,23 @@ export default function InvitationExperience({ onReplay }: { onReplay: () => voi
   }, [language, introComplete]);
 
   useEffect(() => {
+    if (skipIntro) {
+      if (!introBurstStarted.current) {
+        introBurstStarted.current = true;
+        lastFocus.current = 0;
+        setBurst((previous) => previous + 1);
+      }
+      return;
+    }
     const timer = window.setTimeout(() => {
+      if (introBurstStarted.current) return;
+      introBurstStarted.current = true;
       setIntroComplete(true);
       lastFocus.current = 0;
       setBurst((previous) => previous + 1);
     }, PILUPU_INTRO_MS);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [skipIntro]);
   useEffect(() => {
     if (introComplete) scheduleHint();
     return () => window.clearTimeout(hintTimer.current);
@@ -543,8 +572,24 @@ export default function InvitationExperience({ onReplay }: { onReplay: () => voi
         <span aria-hidden="true">|</span>
         <button className={language === 'en' ? 'is-active' : ''} aria-pressed={language === 'en'} type="button" tabIndex={showLanguage ? 0 : -1} onClick={() => setLanguage('en')}>English</button>
       </div>
-      {!showingFinal && <button className="inv-replay inv-replay--corner" onClick={onReplay} type="button" aria-label="Replay invitation" title="Replay invitation"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg></button>}
-      {showingFinal && finalReplayReady && <button className="inv-replay inv-replay--final" onClick={onReplay} type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg><span>Replay</span></button>}
+      {showingFinal && (
+        <div className="inv-final-actions" aria-label="Invitation links">
+          <a href="https://maps.app.goo.gl/9zquu36YXR8nU1xc6" target="_blank" rel="noopener noreferrer">⌖ <span>View Venue</span></a>
+          <a href="/video.html" target="_blank" rel="noopener noreferrer" onClick={onVideoOpen}>▷ <span>Watch Video</span></a>
+        </div>
+      )}
+      <div className={`inv-replay-dock ${showingFinal ? 'inv-replay-dock--final' : ''}`}>
+        {(!showingFinal || finalReplayReady) && (
+          <button className={`inv-replay ${showingFinal ? 'inv-replay--final' : 'inv-replay--corner'}`} onClick={onReplay} type="button" aria-label="Replay invitation" title="Replay invitation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg>
+            {showingFinal && <span>Replay</span>}
+          </button>
+        )}
+        <button className="inv-audio-toggle" onClick={onToggleMusic} type="button" aria-label={musicEnabled ? 'Mute background music' : 'Play background music'} aria-pressed={musicEnabled} title={musicEnabled ? 'Mute music' : 'Play music'}>
+          {musicEnabled ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8c2 2 2 6 0 8M20 5c4 4 4 10 0 14" /></svg>
+            : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l6 6M23 9l-6 6" /></svg>}
+        </button>
+      </div>
     </div>
   </div>;
 }

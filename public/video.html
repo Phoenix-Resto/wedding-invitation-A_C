@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#191317" />
+  <title>Wedding Invitation Video | A &amp; C</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; min-height: 100%; background: #191317; color: #f7ebdd; font-family: Georgia, serif; }
+    main { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: max(1rem,env(safe-area-inset-top)) 1rem max(1rem,env(safe-area-inset-bottom)); gap: 1.15rem; }
+    h1 { margin: 0; font-weight: 400; font-size: clamp(1.15rem,3vw,1.6rem); letter-spacing: .08em; }
+    video { width: min(100%, 1150px); max-height: 75dvh; aspect-ratio: 16 / 9; object-fit: contain; background: #050405; border-radius: .6rem; }
+    button { min-height: 2.8rem; padding: .65rem 1.5rem; color: #f9eee3; background: #854750; border: 1px solid #b4837f; border-radius: 99rem; font: inherit; cursor: pointer; }
+    p { margin: 0; font-size: .9rem; text-align: center; color: #d4c4b7; }
+    @media (orientation: landscape) { main { gap: .5rem; padding: .4rem; } h1 { font-size: 1rem; } video { max-height: 81dvh; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>A &amp; C · Wedding Invitation</h1>
+    <video id="invitationVideo" src="/videos/invitation.mp4" controls playsinline preload="metadata" controlslist="nodownload" disablepictureinpicture></video>
+    <button id="watch" type="button">Play in fullscreen</button>
+    <p id="note">For the best view on mobile, rotate your phone to landscape.</p>
+  </main>
+  <script>
+    const video = document.getElementById('invitationVideo');
+    const button = document.getElementById('watch');
+    const note = document.getElementById('note');
+    button.addEventListener('click', async () => {
+      // Begin playback directly inside the user gesture for autoplay policies.
+      const playback = video.play();
+      try {
+        if (video.requestFullscreen) await video.requestFullscreen();
+        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+        if (screen.orientation && screen.orientation.lock) {
+          try { await screen.orientation.lock('landscape'); } catch (error) { /* unsupported: show rotation prompt */ }
+        }
+      } catch (error) {
+        note.textContent = 'Fullscreen may be unavailable here. You can still watch and rotate your device.';
+      }
+      try { await playback; } catch (error) { note.textContent = 'Press play on the video to begin.'; }
+    });
+  </script>
+</body>
+</html>

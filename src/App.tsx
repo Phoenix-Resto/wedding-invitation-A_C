@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import InvitationExperience from './InvitationExperience';
 
-type Phase = 'splash' | 'splash-exit' | 'cover-arrive' | 'cover' | 'button-drop' | 'opening' | 'opened';
+type Phase = 'welcome' | 'splash' | 'splash-exit' | 'cover-arrive' | 'cover' | 'button-drop' | 'opening' | 'opened';
 
 // Deliberately sequential: the splash must finish fading OUT before the cover enters.
 const SPLASH_VISIBLE_MS = 3550;
@@ -137,12 +137,19 @@ function AmbientDecorations() {
 }
 
 export default function App() {
-  const [phase, setPhase] = useState<Phase>('splash');
+  const [phase, setPhase] = useState<Phase>('welcome');
+  const [skipIntro, setSkipIntro] = useState(false);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [musicStarted, setMusicStarted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const tripleTap = useRef({ count: 0, last: 0 });
   const [splashLoaded, setSplashLoaded] = useState(false);
   const [coverLoaded, setCoverLoaded] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
   const [replayCount, setReplayCount] = useState(0);
   const [fillTarget, setFillTarget] = useState<FillTarget>({ x: 1, y: 1, shiftX: 0, shiftY: 0 });
+  // Gentle default volume; guests can turn the loop off or on at any time.
+  useEffect(() => { if (audioRef.current) audioRef.current.volume = 0.42; }, []);
   const cardRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<HTMLElement>(null);
 
@@ -253,7 +260,71 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [phase, frameIndex]);
 
+  // Audio playback is initiated directly from the Open Card/triple-tap gesture,
+  // since browsers reject autoplay before an interaction.
+  const startMusic = () => {
+    if (!musicEnabled || !audioRef.current) return;
+    setMusicStarted(true);
+    void audioRef.current.play().catch(() => setMusicEnabled(false));
+  };
+
+  const toggleMusic = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (musicEnabled) {
+      audio.pause();
+      setMusicEnabled(false);
+    } else {
+      setMusicEnabled(true);
+      setMusicStarted(true);
+      void audio.play().catch(() => setMusicEnabled(false));
+    }
+  };
+
+  useEffect(() => {
+    const updatePlayback = () => {
+      const audio = audioRef.current;
+      if (!audio || !musicStarted || !musicEnabled) return;
+      if (document.hidden || !document.hasFocus()) audio.pause();
+      else void audio.play().catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', updatePlayback);
+    window.addEventListener('focus', updatePlayback);
+    window.addEventListener('blur', updatePlayback);
+    return () => {
+      document.removeEventListener('visibilitychange', updatePlayback);
+      window.removeEventListener('focus', updatePlayback);
+      window.removeEventListener('blur', updatePlayback);
+    };
+  }, [musicEnabled, musicStarted]);
+
+  const chooseMode = (fullscreen: boolean) => {
+    if (fullscreen && document.documentElement.requestFullscreen) {
+      // Fullscreen must be requested synchronously from the actual button tap.
+      void document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => undefined);
+    }
+    setPhase('splash');
+  };
+
+  const onCoverTripleTap = (event: PointerEvent<HTMLElement>) => {
+    if (phase !== 'cover' || (event.target as HTMLElement).closest('button,a,input')) return;
+    const now = performance.now();
+    const state = tripleTap.current;
+    state.count = now - state.last < 850 ? state.count + 1 : 1;
+    state.last = now;
+    if (state.count === 3) {
+      state.count = 0;
+      setSkipIntro(true);
+      setFrameIndex(OPENING_FRAMES.length - 1);
+      startMusic();
+      setPhase('opened');
+    }
+  };
+
   const replay = () => {
+    audioRef.current?.pause();
+    setMusicStarted(false);
+    setSkipIntro(false);
     setFrameIndex(0);
     setReplayCount((count) => count + 1);
     // Both images remain cached, so replay does not depend on a second onLoad event.
@@ -263,6 +334,7 @@ export default function App() {
   const startOpening = () => {
     if (phase !== 'cover') return;
     setFrameIndex(0);
+    startMusic();
     setPhase('button-drop');
   };
 
@@ -273,7 +345,21 @@ export default function App() {
       onContextMenu={(event) => event.preventDefault()}
       onDragStart={(event) => event.preventDefault()}
     >
+      <audio ref={audioRef} src="/audio/urban-india.mp3" preload="auto" loop aria-hidden="true" />
       <AmbientDecorations />
+      {phase === 'welcome' && (
+        <section className="inv-start-overlay" aria-label="Choose invitation viewing mode">
+          <div className="inv-start-dialog" role="dialog" aria-modal="true" aria-labelledby="inv-start-title">
+            <span className="inv-start-ornament" aria-hidden="true">✧</span>
+            <h1 id="inv-start-title">Wedding Invitation</h1>
+            <p>Choose how you would like to view the invitation.</p>
+            <div className="inv-start-options">
+              <button type="button" onClick={() => chooseMode(true)}>⛶ <span>Fullscreen</span></button>
+              <button type="button" onClick={() => chooseMode(false)}>Normal view</button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section
         key={`splash-${replayCount}`}
@@ -293,16 +379,17 @@ export default function App() {
               draggable={false}
             />
             <LandingPetals onCard />
-            <div className="splash-loader" role="status" aria-label="Preparing your invitation">
+          </div>
+          <div className="splash-loader" role="status" aria-label="Preparing your invitation">
               <div className="splash-loader__line"><span /></div>
               <span className="splash-loader__petal" aria-hidden="true" />
-            </div>
           </div>
         </div>
       </section>
 
       <section
         className="screen screen--cover"
+        onPointerUp={onCoverTripleTap}
         aria-label="Wedding invitation card"
         aria-hidden={phase === 'splash' || phase === 'splash-exit'}
         inert={phase !== 'cover' && phase !== 'opened'}
@@ -346,7 +433,7 @@ export default function App() {
         {phase === 'opened' && (
           <div className="invitation-page-background" aria-hidden="true" />
         )}
-        {phase === 'opened' && <InvitationExperience onReplay={replay} />}
+        {phase === 'opened' && <InvitationExperience onReplay={replay} skipIntro={skipIntro} musicEnabled={musicEnabled} onToggleMusic={toggleMusic} onVideoOpen={() => audioRef.current?.pause()} />}
       </section>
     </main>
   );

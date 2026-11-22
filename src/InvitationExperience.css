@@ -131,7 +131,7 @@
 /* Date Ornament */
 .inv-ceremony__date-ornament { min-width: 0; }
 .inv-ceremony__date-ornament img { width: 100%; height: auto; max-height: 22svh; object-fit: contain; }
-.inv-ceremony__month, .inv-ceremony__weekday { position: relative; color: #174b70; min-width: 0; text-align: center; color: #742c37; font: 700 clamp(1rem,4.8vw,2rem)/1.2 'Noto Sans Telugu','Nirmala UI',Georgia,serif; white-space: nowrap; }
+.inv-ceremony__month, .inv-ceremony__weekday { position: relative; color: #174b70; min-width: 0; text-align: center; font: 700 clamp(1rem,4.8vw,2rem)/1.2 'Noto Sans Telugu','Nirmala UI',Georgia,serif; white-space: nowrap; }
 .inv-ceremony__month { left: 2svh; }
 .inv-ceremony__weekday { left: -2svh; }
 .inv-scene--vivahamu[lang='en'] .inv-ceremony__month,
@@ -175,7 +175,7 @@
 
 /* ==== Credits Scene ==== */
 .inv-final__layout { height: 100%; display: grid; grid-template-rows: .22fr .31fr .08fr .21fr .18fr; justify-items: center; align-items: center; padding: 4% 6%; }
-.inv-final__slokam { position: relative; top: -15svh; grid-row: 2; width: 100%; color: #762934; font: 700 clamp(1.2rem,4.2vw,1.8rem)/1.7 'Noto Sans Telugu','Nirmala UI',serif; text-align: center; }
+.inv-final__slokam { position: relative; top: -15svh; color: #174b70; grid-row: 2; width: 100%; font: 700 clamp(1.2rem,4.2vw,1.8rem)/1.7 'Noto Sans Telugu','Nirmala UI',serif; text-align: center; }
 .inv-final__slokam-line { margin-block: .35rem; }
 .inv-final__invitation { position: relative; top: -20svh; grid-row: 4; width: 100%; color: #74313b; font: italic 600 clamp(1.1rem,4.2vw,1.75rem)/1.65 'Palatino Linotype',Georgia,serif; text-align: center; }
 
@@ -226,3 +226,97 @@
   .inv-final__layout { grid-template-rows: .14fr .34fr .04fr .35fr .13fr; }
 }
 @media (prefers-reduced-motion: reduce) { .inv-intro__deity--left,.inv-intro__deity--right,.inv-intro__title { animation-duration: .01ms; animation-delay: .01ms; } .inv-scroll-hint,.inv-language-toggle { transition: none; } .inv-scroll-hint__chevron { animation: none; } }
+
+/* Phase 5: animated decorative underline follows its own scroll-progress
+   range alongside each title. The manual title sizes/offsets above remain. */
+.inv-person__header, .inv-ceremony__heading,
+.inv-venue__heading, .inv-venue__dinner-heading {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(.05rem,.4svh,.32rem);
+}
+.inv-title-underline {
+  display: block;
+  width: min(72%, 11rem);
+  height: clamp(.65rem, 2svh, 1.1rem);
+  max-width: 100%;
+  object-fit: contain;
+  flex: none;
+}
+.inv-ceremony__heading .inv-title-underline { width: min(75%, 12rem); }
+.inv-venue__heading .inv-title-underline { width: min(72%, 12rem); }
+.inv-venue__dinner-heading .inv-title-underline { width: min(75%, 9rem); }
+
+/* Music and Replay share the same lower control row. Keep the final version
+   centered, without disturbing the existing language toggle on other scenes. */
+.inv-replay-dock {
+  position: absolute;
+  right: max(.85rem, env(safe-area-inset-right));
+  bottom: max(1.1rem, env(safe-area-inset-bottom));
+  z-index: 7;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: .6rem;
+  pointer-events: auto;
+}
+.inv-replay-dock--final { left: 50%; right: auto; transform: translateX(-50%); }
+.inv-replay-dock .inv-replay,
+.inv-audio-toggle {
+  position: static;
+  inset: auto;
+  transform: none;
+  margin: 0;
+  flex: none;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.inv-replay-dock .inv-replay--final { animation: inv-replay-reveal .45s ease-out both; }
+.inv-audio-toggle {
+  padding: .64rem;
+  border-radius: 50%;
+  border: 1px solid rgba(149,103,74,.36);
+  color: #754e43;
+  background: rgba(255,249,239,.96);
+  box-shadow: 0 .25rem .85rem rgba(102,70,55,.18);
+}
+.inv-audio-toggle svg { width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.inv-final-actions {
+  position: absolute;
+  z-index: 8;
+  top: 66%;
+  left: 50%;
+  display: flex;
+  gap: clamp(.5rem,2vw,1rem);
+  transform: translateX(-50%);
+  justify-content: center;
+  width: min(92%, 27rem);
+  pointer-events: auto;
+  animation: inv-final-actions-enter .5s ease-out both;
+}
+.inv-final-actions a {
+  display: inline-flex;
+  gap: .45em;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.8rem;
+  padding: .55rem .45rem;
+  color: #7b3541;
+  background: rgba(255,247,234,.95);
+  border: 1px solid rgba(136,76,77,.35);
+  border-radius: 99rem;
+  box-shadow: 0 .2rem .7rem rgba(79,48,41,.12);
+  font: 700 clamp(.76rem,3vw,.98rem)/1.2 Georgia,serif;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.inv-final-actions a:focus-visible { outline: 2px solid #87513f; outline-offset: .2rem; }
+@keyframes inv-final-actions-enter { from { opacity: 0; transform: translate(-50%,.7rem) } to { opacity: 1; transform: translate(-50%,0) } }
+@media (max-height: 560px) { .inv-final-actions { top: 68%; } }
