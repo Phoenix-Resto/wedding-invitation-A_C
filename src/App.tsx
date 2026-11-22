@@ -152,7 +152,7 @@ export default function App() {
   const [fillTarget, setFillTarget] = useState<FillTarget>({ x: 1, y: 1, shiftX: 0, shiftY: 0 });
   // Audio speed is intentionally configurable here for phone testing.
   // Set to 1 for normal speed, 0.9 for slightly slower, etc.
-  const MUSIC_PLAYBACK_RATE = 0.85;
+  const MUSIC_PLAYBACK_RATE = 0.95;
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
