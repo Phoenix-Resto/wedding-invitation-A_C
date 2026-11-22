@@ -132,7 +132,7 @@ button:focus-visible { outline: .14rem solid #a77d4c; outline-offset: .25rem; }
   pointer-events: none;
 }
 /* Splash has considerably more visible ground around it. */
-.invitation-card--splash { width: min(84vw,31rem,46svh); aspect-ratio: 3 / 4.2; }
+.invitation-card--splash { width: min(84vw,31rem,46svh); aspect-ratio: 3 / 4.2; top: -3svh; }
 /* Soft contact shadow follows the card's natural edge, not a rectangular frame. */
 .invitation-card::after {
   content: '';
@@ -169,7 +169,7 @@ button:focus-visible { outline: .14rem solid #a77d4c; outline-offset: .25rem; }
   position: absolute;
   z-index: 3;
   top: auto;
-  bottom: max(4.5svh, calc(env(safe-area-inset-bottom) + 1rem));
+  bottom: max(17svh, calc(env(safe-area-inset-bottom) + 1rem));
   left: 50%;
   width: min(65vw, 18rem);
   transform: translateX(-50%);
