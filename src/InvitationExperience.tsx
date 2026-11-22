@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import './InvitationExperience.css';
 
 type Language = 'te' | 'en';
@@ -167,15 +167,59 @@ type Petal = {
   x: number; y: number; originX: number; originY: number;
   vx: number; vy: number; burstVX: number; burstVY: number;
   angle: number; spin: number; size: number; age: number;
-  approachTime: number; startDelay: number; sway: number; alpha: number;
+  approachTime: number; startDelay: number; sway: number; alpha: number; variant: number;
 };
 
-// The paper and the invitation are stationary; these petals move in apparent
-// DEPTH (small/blurred -> large/sharp) at varied points around the entire screen.
-// After approaching, every petal drifts on its own until it exits the viewport.
+// Draw the gradient, highlights, blur and shadow ONCE into small cached sprites.
+// Per-frame gradients, canvas filter and per-petal shadows caused expensive
+// mobile software rendering when successive scenes accumulated petals.
+function createPetalSprites(): HTMLCanvasElement[][] {
+  const palettes = [
+    ['#fff3e8', '#edb8b6', '#b87f85'],
+    ['#fff2e5', '#dca9a8', '#aa777d'],
+    ['#fff5e9', '#f0c9bc', '#c68d92'],
+  ];
+  const dimension = 96;
+  return palettes.map(([light, middle, dark]) => {
+    const sharp = document.createElement('canvas');
+    sharp.width = sharp.height = dimension;
+    const ctx = sharp.getContext('2d');
+    if (ctx) {
+      const gradient = ctx.createLinearGradient(25, 22, 72, 74);
+      gradient.addColorStop(0, light);
+      gradient.addColorStop(.55, middle);
+      gradient.addColorStop(1, dark);
+      ctx.fillStyle = gradient;
+      ctx.shadowColor = 'rgba(109,60,57,.18)';
+      ctx.shadowBlur = 7;
+      ctx.shadowOffsetY = 3;
+      ctx.beginPath();
+      ctx.moveTo(24, 53);
+      ctx.quadraticCurveTo(20, 15, 67, 32);
+      ctx.quadraticCurveTo(68, 60, 24, 53);
+      ctx.fill();
+    }
+    const softened = (blur: number) => {
+      const sprite = document.createElement('canvas');
+      sprite.width = sprite.height = dimension;
+      const spriteContext = sprite.getContext('2d');
+      if (spriteContext) {
+        spriteContext.filter = `blur(${blur}px)`;
+        spriteContext.drawImage(sharp, 0, 0);
+        spriteContext.filter = 'none';
+      }
+      return sprite;
+    };
+    return [softened(4), softened(1.8), sharp];
+  });
+}
+
+// Petals still approach along a simulated Z axis and scatter independently;
+// rendering is sprite-based, capped at 30 FPS, and sleeps while idle/hidden.
 function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy: RefObject<number> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const petalsRef = useRef<Petal[]>([]);
+  const wakeRef = useRef<(() => void) | null>(null);
   const dimensions = useRef({ width: 1, height: 1 });
 
   useEffect(() => {
@@ -183,34 +227,45 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
     if (!canvas) return;
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
-    let animationId = 0;
-    let last = 0;
+    const sprites = createPetalSprites();
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let reduced = motionQuery.matches;
-    const updateMotion = () => { reduced = motionQuery.matches; };
+    let animationId = 0;
+    let lastPaint = 0;
+    const frameMs = 1000 / 30;
+    const updateMotion = () => { reduced = motionQuery.matches; wake(); };
     motionQuery.addEventListener?.('change', updateMotion);
 
     const resize = () => {
       const bounds = canvas.getBoundingClientRect();
-      const ratio = Math.min(window.devicePixelRatio || 1, 1.7);
+      // Lower backing-store resolution only for this translucent effects layer.
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.35);
       dimensions.current = { width: bounds.width, height: bounds.height };
-      canvas.width = Math.ceil(bounds.width * ratio);
-      canvas.height = Math.ceil(bounds.height * ratio);
+      canvas.width = Math.max(1, Math.ceil(bounds.width * ratio));
+      canvas.height = Math.max(1, Math.ceil(bounds.height * ratio));
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      lastPaint = 0;
+      wake();
     };
-    resize();
-    const observer = new ResizeObserver(resize);
-    observer.observe(canvas);
 
-    const paint = (stamp: number) => {
-      if (!last) last = stamp;
-      const dt = Math.min((stamp - last) / 1000, 0.05);
-      last = stamp;
+    function wake() {
+      if (!animationId && !document.hidden && petalsRef.current.length > 0) {
+        animationId = window.requestAnimationFrame(paint);
+      }
+    }
+    function paint(stamp: number) {
+      animationId = 0;
+      // The animation may be woken on a device with a high-refresh-rate screen.
+      if (lastPaint && stamp - lastPaint < frameMs) { wake(); return; }
+      const dt = lastPaint ? Math.min((stamp - lastPaint) / 1000, .09) : 0;
+      lastPaint = stamp;
       const { width, height } = dimensions.current;
       ctx.clearRect(0, 0, width, height);
       const boost = Math.min(3.2, scrollEnergy.current || 0);
       scrollEnergy.current = Math.max(0, boost - dt * 1.15);
       const petals = petalsRef.current;
+
       for (let i = petals.length - 1; i >= 0; i -= 1) {
         const p = petals[i];
         p.age += dt;
@@ -219,8 +274,6 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
         const approaching = clamp01(elapsed / p.approachTime);
         const depth = reduced ? 1 : smooth(approaching);
         const scale = reduced ? 1 : .12 + 1.05 * depth;
-        // The approach expands slightly outward from each random starting point.
-        // This creates depth, not the old top-to-bottom rain effect.
         if (approaching < 1) {
           p.x = p.originX + p.burstVX * depth + Math.sin(elapsed * 2.7 + p.sway) * 3 * depth;
           p.y = p.originY + p.burstVY * depth + Math.cos(elapsed * 2.4 + p.sway) * 4 * depth;
@@ -231,39 +284,41 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
         }
         if (!reduced) p.angle += p.spin * dt * (1 + boost * .27);
         const drawnSize = p.size * scale;
-        // Never discard an in-view petal, even when another section triggers.
+        // Remove naturally departed petals, never recycle in-view particles.
         if (p.x < -drawnSize * 2 || p.x > width + drawnSize * 2 ||
             p.y < -drawnSize * 2 || p.y > height + drawnSize * 2) {
           petals.splice(i, 1);
           continue;
         }
+        const tier = depth < .35 ? 0 : depth < .75 ? 1 : 2;
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.angle);
         ctx.globalAlpha = p.alpha * (reduced ? 1 : Math.min(1, .16 + depth));
-        ctx.filter = reduced ? 'none' : `blur(${((1 - depth) * 1.8).toFixed(2)}px)`;
-        ctx.shadowColor = 'rgba(109, 60, 57, .16)';
-        ctx.shadowBlur = drawnSize * .22;
-        ctx.shadowOffsetY = drawnSize * .1;
-        const gradient = ctx.createLinearGradient(-drawnSize, -drawnSize, drawnSize, drawnSize);
-        gradient.addColorStop(0, '#fff3e8');
-        gradient.addColorStop(.55, '#edb8b6');
-        gradient.addColorStop(1, '#b87f85');
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.moveTo(-drawnSize * .48, drawnSize * .15);
-        ctx.quadraticCurveTo(-drawnSize * .6, -drawnSize * .75, drawnSize * .56, -drawnSize * .36);
-        ctx.quadraticCurveTo(drawnSize * .55, drawnSize * .28, -drawnSize * .48, drawnSize * .15);
-        ctx.fill();
+        ctx.drawImage(sprites[p.variant][tier], -drawnSize * 1.1, -drawnSize * 1.1, drawnSize * 2.2, drawnSize * 2.2);
         ctx.restore();
       }
-      animationId = window.requestAnimationFrame(paint);
+      if (!reduced && petals.length > 0) wake();
+    }
+
+    const visibilityChanged = () => {
+      if (document.hidden) {
+        if (animationId) window.cancelAnimationFrame(animationId);
+        animationId = 0;
+        lastPaint = 0;
+      } else wake();
     };
-    animationId = window.requestAnimationFrame(paint);
+    wakeRef.current = wake;
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    document.addEventListener('visibilitychange', visibilityChanged);
     return () => {
-      window.cancelAnimationFrame(animationId);
+      if (animationId) window.cancelAnimationFrame(animationId);
+      wakeRef.current = null;
       observer.disconnect();
       motionQuery.removeEventListener?.('change', updateMotion);
+      document.removeEventListener('visibilitychange', visibilityChanged);
     };
   }, [scrollEnergy]);
 
@@ -271,7 +326,7 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
     if (!burst) return;
     const { width, height } = dimensions.current;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const count = reduced ? 7 : 19;
+    const count = reduced ? 6 : width < 420 ? 12 : 15;
     const batch: Petal[] = Array.from({ length: count }, (_, i) => {
       const angle = Math.random() * Math.PI * 2;
       const direction = Math.random() < .5 ? -1 : 1;
@@ -292,9 +347,11 @@ function PersistentPetals({ burst, scrollEnergy }: { burst: number; scrollEnergy
         startDelay: i * .035 + Math.random() * .32,
         sway: Math.random() * Math.PI * 2,
         alpha: .55 + Math.random() * .36,
+        variant: Math.floor(Math.random() * 3),
       };
     });
     petalsRef.current.push(...batch);
+    wakeRef.current?.();
   }, [burst]);
   return <canvas ref={canvasRef} className="inv-petals-canvas" aria-hidden="true" />;
 }
@@ -358,11 +415,13 @@ function applyPhotoReveal(photo: HTMLElement | null, local: number) {
   photo.style.setProperty('--photo-bloom', `${amount}`);
 }
 
-export default function InvitationExperience({ onReplay, skipIntro = false, musicEnabled, onToggleMusic, onVideoOpen }: {
+export default function InvitationExperience({ onReplay, skipIntro = false, musicEnabled, onToggleMusic, onToggleFullscreen, isFullscreen, onVideoOpen }: {
   onReplay: () => void;
   skipIntro?: boolean;
   musicEnabled: boolean;
   onToggleMusic: () => void;
+  onToggleFullscreen: () => void;
+  isFullscreen: boolean;
   onVideoOpen: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -379,6 +438,7 @@ export default function InvitationExperience({ onReplay, skipIntro = false, musi
   const [introComplete, setIntroComplete] = useState(skipIntro);
   const introBurstStarted = useRef(false);
   const [language, setLanguage] = useState<Language>('te');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [burst, setBurst] = useState(0);
   const [activeScene, setActiveScene] = useState(0);
   const [showHint, setShowHint] = useState(false);
@@ -574,20 +634,64 @@ export default function InvitationExperience({ onReplay, skipIntro = false, musi
       </div>
       {showingFinal && (
         <div className="inv-final-actions" aria-label="Invitation links">
-          <a href="https://maps.app.goo.gl/9zquu36YXR8nU1xc6" target="_blank" rel="noopener noreferrer">⌖ <span>View Venue</span></a>
-          <a href="/video.html" target="_blank" rel="noopener noreferrer" onClick={onVideoOpen}>▷ <span>Watch Video</span></a>
+          <a href="https://maps.app.goo.gl/9zquu36YXR8nU1xc6" target="_blank" rel="noopener noreferrer">📍<span>Venue Location</span></a>
+          <a href="/video.html" target="_blank" rel="noopener noreferrer" onClick={onVideoOpen}>▷ <span>Invitation Video</span></a>
         </div>
       )}
-      <div className={`inv-replay-dock ${showingFinal ? 'inv-replay-dock--final' : ''}`}>
-        {(!showingFinal || finalReplayReady) && (
-          <button className={`inv-replay ${showingFinal ? 'inv-replay--final' : 'inv-replay--corner'}`} onClick={onReplay} type="button" aria-label="Replay invitation" title="Replay invitation">
+      <div className={`inv-quick-menu ${menuOpen ? 'inv-quick-menu--open' : ''}`} onKeyDown={(event) => { if (event.key === 'Escape') setMenuOpen(false); }}>
+        <div id="inv-quick-menu-actions" className="inv-quick-menu__actions" aria-hidden={!menuOpen}>
+          <button
+            className="inv-quick-menu__action"
+            style={{ '--menu-index': 0 } as CSSProperties}
+            type="button"
+            tabIndex={menuOpen ? 0 : -1}
+            disabled={showingFinal && !finalReplayReady}
+            onClick={onReplay}
+            aria-label="Replay invitation"
+            title="Replay invitation"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 1 6M3 4v6h6" /></svg>
-            {showingFinal && <span>Replay</span>}
           </button>
-        )}
-        <button className="inv-audio-toggle" onClick={onToggleMusic} type="button" aria-label={musicEnabled ? 'Mute background music' : 'Play background music'} aria-pressed={musicEnabled} title={musicEnabled ? 'Mute music' : 'Play music'}>
-          {musicEnabled ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8c2 2 2 6 0 8M20 5c4 4 4 10 0 14" /></svg>
-            : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l6 6M23 9l-6 6" /></svg>}
+          <button
+            className="inv-quick-menu__action"
+            style={{ '--menu-index': 1 } as CSSProperties}
+            type="button"
+            tabIndex={menuOpen ? 0 : -1}
+            onClick={onToggleFullscreen}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          >
+            {isFullscreen
+              ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6" /></svg>
+              : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6" /></svg>}
+          </button>
+          <button
+            className="inv-quick-menu__action"
+            style={{ '--menu-index': 2 } as CSSProperties}
+            type="button"
+            tabIndex={menuOpen ? 0 : -1}
+            onClick={onToggleMusic}
+            aria-label={musicEnabled ? 'Mute background music' : 'Play background music'}
+            aria-pressed={musicEnabled}
+            title={musicEnabled ? 'Mute music' : 'Play music'}
+          >
+            {musicEnabled
+              ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8c2 2 2 6 0 8M20 5c4 4 4 10 0 14" /></svg>
+              : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 9l6 6M23 9l-6 6" /></svg>}
+          </button>
+        </div>
+        <button
+          className="inv-quick-menu__toggle"
+          type="button"
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-controls="inv-quick-menu-actions"
+          aria-expanded={menuOpen}
+          aria-label={menuOpen ? 'Close controls' : 'Open controls'}
+          title={menuOpen ? 'Close controls' : 'Invitation controls'}
+        >
+          <span className="inv-quick-menu__line" />
+          <span className="inv-quick-menu__line" />
+          <span className="inv-quick-menu__line" />
         </button>
       </div>
     </div>

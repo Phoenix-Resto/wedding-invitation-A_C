@@ -141,6 +141,8 @@ export default function App() {
   const [skipIntro, setSkipIntro] = useState(false);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [musicStarted, setMusicStarted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenNotice, setFullscreenNotice] = useState('');
   const audioRef = useRef<HTMLAudioElement>(null);
   const tripleTap = useRef({ count: 0, last: 0 });
   const [splashLoaded, setSplashLoaded] = useState(false);
@@ -148,8 +150,15 @@ export default function App() {
   const [frameIndex, setFrameIndex] = useState(0);
   const [replayCount, setReplayCount] = useState(0);
   const [fillTarget, setFillTarget] = useState<FillTarget>({ x: 1, y: 1, shiftX: 0, shiftY: 0 });
-  // Gentle default volume; guests can turn the loop off or on at any time.
-  useEffect(() => { if (audioRef.current) audioRef.current.volume = 0.42; }, []);
+  // Audio speed is intentionally configurable here for phone testing.
+  // Set to 1 for normal speed, 0.9 for slightly slower, etc.
+  const MUSIC_PLAYBACK_RATE = 0.85;
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = 0.42;
+    audio.playbackRate = MUSIC_PLAYBACK_RATE;
+  }, []);
   const cardRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<HTMLElement>(null);
 
@@ -298,6 +307,26 @@ export default function App() {
     };
   }, [musicEnabled, musicStarted]);
 
+  useEffect(() => {
+    const syncFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    syncFullscreen();
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, []);
+
+  const toggleFullscreen = () => {
+    setFullscreenNotice('');
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => setFullscreenNotice('Could not exit fullscreen.'));
+    } else if (document.documentElement.requestFullscreen) {
+      // Synchronous direct user gesture; no awaited work before this request.
+      void document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+        .catch(() => setFullscreenNotice('Fullscreen is unavailable in this browser.'));
+    } else {
+      setFullscreenNotice('Fullscreen is unavailable in this browser.');
+    }
+  };
+
   const chooseMode = (fullscreen: boolean) => {
     if (fullscreen && document.documentElement.requestFullscreen) {
       // Fullscreen must be requested synchronously from the actual button tap.
@@ -346,6 +375,7 @@ export default function App() {
       onDragStart={(event) => event.preventDefault()}
     >
       <audio ref={audioRef} src="/audio/urban-india.mp3" preload="auto" loop aria-hidden="true" />
+      {fullscreenNotice && <p className="inv-fullscreen-notice" role="status" onClick={() => setFullscreenNotice('')}>{fullscreenNotice}</p>}
       <AmbientDecorations />
       {phase === 'welcome' && (
         <section className="inv-start-overlay" aria-label="Choose invitation viewing mode">
@@ -433,7 +463,7 @@ export default function App() {
         {phase === 'opened' && (
           <div className="invitation-page-background" aria-hidden="true" />
         )}
-        {phase === 'opened' && <InvitationExperience onReplay={replay} skipIntro={skipIntro} musicEnabled={musicEnabled} onToggleMusic={toggleMusic} onVideoOpen={() => audioRef.current?.pause()} />}
+        {phase === 'opened' && <InvitationExperience onReplay={replay} skipIntro={skipIntro} musicEnabled={musicEnabled} onToggleMusic={toggleMusic} onToggleFullscreen={toggleFullscreen} isFullscreen={isFullscreen} onVideoOpen={() => audioRef.current?.pause()} />}
       </section>
     </main>
   );
